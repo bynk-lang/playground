@@ -71,7 +71,7 @@ jobs:
           if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::BUMP_APP_ID / BUMP_APP_KEY are not set; no pull request moves BYNK_VERSION to $TAG"
+            echo "::warning::BUMP_APP_ID / BUMP_APP_KEY are not set, so the canary cannot propose moving BYNK_VERSION (passed with $TAG)"
             echo "configured=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Mint the bump token
