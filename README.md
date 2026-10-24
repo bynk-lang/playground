@@ -101,7 +101,9 @@ The playground is enrolled in the bynk-lang org canary ([`canary/README.md`](htt
 
 1. runs `test.yml` at that release: the unit tests, every gallery example through that release's wasm compiler, and the bundle;
 2. runs the org's `canary.yml`, which runs `bynk-ci` on `share/` at the same release and opens, updates or closes the `canary` issue here;
-3. when both pass and the release is newer than `BYNK_VERSION`, opens a pull request moving the pin (closing any older one), and starts CI on it. Merging it deploys the new compiler.
+3. when both pass and the release is newer than `BYNK_VERSION`, opens a pull request moving the pin (closing any older one); CI runs on it, and merging it deploys the new compiler.
+
+The org does not let `GITHUB_TOKEN` open pull requests, so step 3 uses a GitHub App with **Contents** and **Pull requests: Read and write**, installed on this repository, through the secrets `BUMP_APP_ID` (its client id) and `BUMP_APP_KEY` (a private key). Until they are set, the canary still runs and reports, and the bump step warns and skips.
 
 A manual run: Actions → Bynk canary → Run workflow, with a version or `latest`.
 

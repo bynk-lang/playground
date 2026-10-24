@@ -47,21 +47,51 @@ jobs:
       working-directory: share
       source: src
 
+  # The org does not let GITHUB_TOKEN open pull requests, so the bump goes
+  # through a GitHub App (repository permissions Contents and Pull requests:
+  # Read and write, installed on this repository) whose client id and private
+  # key are the secrets BUMP_APP_ID and BUMP_APP_KEY. Its push also starts CI
+  # on the bump branch, which a GITHUB_TOKEN push would not. Until the secrets
+  # are set, the job warns and skips.
   bump:
     name: Propose the pin bump
     needs: [tests, canary]
     if: needs.canary.outputs.result == 'pass'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write # to start CI on the bump branch (below)
+    permissions: {} # the App token does the writing
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Open or update the bump pull request
+      - name: Check the App secrets
+        id: secrets
         env:
-          GH_TOKEN: ${{ github.token }}
+          APP_ID: ${{ secrets.BUMP_APP_ID }}
+          APP_KEY: ${{ secrets.BUMP_APP_KEY }}
+          TAG: ${{ needs.tests.outputs.tag }}
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::BUMP_APP_ID / BUMP_APP_KEY are not set; no pull request moves BYNK_VERSION to $TAG"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Mint the bump token
+        if: steps.secrets.outputs.configured == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.BUMP_APP_ID }}
+          private-key: ${{ secrets.BUMP_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - if: steps.secrets.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Open or update the bump pull request
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           TAG: ${{ needs.tests.outputs.tag }}
         run: |
           set -euo pipefail
@@ -73,8 +103,9 @@ jobs:
             exit 0
           fi
           branch="canary/bynk-$TAG"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          uid="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
           git switch -c "$branch"
           echo "$TAG" > BYNK_VERSION
           git commit -am "Move the playground to Bynk $TAG"
@@ -89,6 +120,3 @@ jobs:
             | while read -r n; do
                 gh pr close "$n" --delete-branch --comment "Superseded by the bump to $TAG."
               done
-          # A push made with GITHUB_TOKEN starts no workflows, but a dispatch
-          # does, so CI reports on the bump commit.
-          gh workflow run ci.yml --ref "$branch"
