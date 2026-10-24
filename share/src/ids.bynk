@@ -18,7 +18,7 @@ The KV key for a snippet id. Namespacing keeps shared snippets separate from
 anything else stored in the same namespace.
 ---
 fn keyOf(id: SnippetId) -> String {
-  "snippet:\(id)"
+	"snippet:\(id)"
 }
 
 ---
@@ -31,5 +31,5 @@ window for the vast majority of shares, and a sliding window would mean a
 frequently-viewed link never expires, defeating the bound.
 ---
 fn snippetTtlSeconds() -> Int {
-  2592000
+	2592000
 }
