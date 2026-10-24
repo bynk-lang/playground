@@ -11,9 +11,9 @@ declare const __APP_ORIGIN__: string;
 declare const __SANDBOX_ORIGIN__: string;
 
 export const APP_ORIGIN: string =
-  typeof __APP_ORIGIN__ === "string" ? __APP_ORIGIN__ : "https://playground.bynk-lang.org";
+  typeof __APP_ORIGIN__ === "string" ? __APP_ORIGIN__ : "https://playground.bynk-lang.dev";
 export const SANDBOX_ORIGIN: string =
-  typeof __SANDBOX_ORIGIN__ === "string" ? __SANDBOX_ORIGIN__ : "https://sandbox.bynk-lang.org";
+  typeof __SANDBOX_ORIGIN__ === "string" ? __SANDBOX_ORIGIN__ : "https://sandbox.bynk-lang.dev";
 
 /// One emitted JavaScript module of a compiled program.
 export interface EmittedFile {

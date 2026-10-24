@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Stage the compiler's browser artefacts from a published Bynk release into
-# src/vendor/, instead of building the compiler (build-wasm.sh, build-grammar.sh).
+# src/vendor/. The compiler is built in bynk-lang/bynk, never here.
 # The playground then runs the release it is pinned to.
 #
-#   scripts/fetch-assets.sh [tag]      # default: the tag in playground/BYNK_VERSION
+#   scripts/fetch-assets.sh [tag]      # default: the tag in BYNK_VERSION
 #
 # The tarball is checked against the release's SHA256SUMS before it is unpacked.
 # BYNK_RELEASE_BASE_URL overrides the download base (a file:// directory holding

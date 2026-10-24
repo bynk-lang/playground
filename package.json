@@ -3,15 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The Bynk in-browser REPL/playground (in-browser track, slice 4). A fully static, client-side app: compile Bynk to JS in wasm, run it in a cross-origin sandboxed iframe + Web Worker. Deploys to playground.bynk-lang.org (app) + sandbox.bynk-lang.org (execution).",
+  "description": "The Bynk in-browser playground. A fully static, client-side app: compile Bynk to JS in wasm, run it in a cross-origin sandboxed iframe + Web Worker. Served at playground.bynk-lang.dev (app) + sandbox.bynk-lang.dev (execution).",
   "scripts": {
-    "build:wasm": "BYNK_WASM_OUT_DIR=\"$PWD/src/vendor\" bash ../scripts/build-wasm.sh",
     "fetch:assets": "bash scripts/fetch-assets.sh",
-    "build:grammar": "bash scripts/build-grammar.sh",
     "build": "node build.mjs",
-    "build:all": "npm run build:wasm && npm run build:grammar && npm run build",
     "serve": "node serve.mjs",
-    "test": "node --test test/positions.test.mjs"
+    "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
@@ -26,5 +23,10 @@
     "@codemirror/view": "^6.43.15",
     "@lezer/highlight": "^1.2.5",
     "web-tree-sitter": "0.27.1"
+  },
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bynk-lang/playground"
   }
 }

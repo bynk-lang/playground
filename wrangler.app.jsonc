@@ -1,0 +1,11 @@
+// The app origin: the editor + the wasm compiler. An assets-only Worker serving
+// dist/, reachable at playground.bynk-lang.workers.dev and served at
+// playground.bynk-lang.dev. The sandbox is a separate Worker on a separate
+// origin (wrangler.sandbox.jsonc); never merge the two (ADR 0140).
+{
+  "name": "playground",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist" },
+  "workers_dev": true,
+  "routes": [{ "pattern": "playground.bynk-lang.dev", "custom_domain": true }]
+}

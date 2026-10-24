@@ -1,0 +1,12 @@
+// The sandbox origin: the execution document that runs untrusted snippet code
+// (src/sandbox.ts). It MUST stay a different origin from the app
+// (wrangler.app.jsonc): that separation is the safety boundary (ADR 0140).
+// Reachable at playground-sandbox.bynk-lang.workers.dev and served at
+// sandbox.bynk-lang.dev.
+{
+  "name": "playground-sandbox",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist" },
+  "workers_dev": true,
+  "routes": [{ "pattern": "sandbox.bynk-lang.dev", "custom_domain": true }]
+}

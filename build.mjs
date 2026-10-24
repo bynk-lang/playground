@@ -7,8 +7,8 @@
 import * as esbuild from "esbuild";
 import { cp, mkdir, rm } from "node:fs/promises";
 
-const appOrigin = process.env.BYNK_APP_ORIGIN ?? "https://playground.bynk-lang.org";
-const sandboxOrigin = process.env.BYNK_SANDBOX_ORIGIN ?? "https://sandbox.bynk-lang.org";
+const appOrigin = process.env.BYNK_APP_ORIGIN ?? "https://playground.bynk-lang.dev";
+const sandboxOrigin = process.env.BYNK_SANDBOX_ORIGIN ?? "https://sandbox.bynk-lang.dev";
 
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist", { recursive: true });
@@ -65,7 +65,7 @@ for (const w of ["tree-sitter.wasm", "tree-sitter-bynk.wasm"]) {
   try {
     await cp(`src/vendor/${w}`, `dist/${w}`);
   } catch {
-    console.warn(`note: src/vendor/${w} missing — run \`npm run build:grammar\` for web-tree-sitter highlighting`);
+    console.warn(`note: src/vendor/${w} missing — run \`npm run fetch:assets\` for web-tree-sitter highlighting`);
   }
 }
 

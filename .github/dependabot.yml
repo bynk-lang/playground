@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # The app's npm dependencies. The deploy job holds the Cloudflare token.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # The GitHub Actions pinned in .github/workflows/.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+# The Bynk compiler itself is not a dependency Dependabot sees: BYNK_VERSION
+# moves by the canary's bump pull request (.github/workflows/bynk-canary.yml).

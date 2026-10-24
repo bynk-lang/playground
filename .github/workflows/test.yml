@@ -1,0 +1,73 @@
+name: Test
+
+# The playground's checks against one Bynk release: stage that release's browser
+# artefacts (bynk-web-<tag>.tar.gz), then type-check, unit-test, run every
+# gallery example through the release's wasm compiler, and bundle.
+#
+# Called by ci.yml at the pinned BYNK_VERSION, and by bynk-canary.yml at the
+# release the org canary dispatched, so a Bynk release that breaks the
+# playground fails here before anyone moves the pin to it.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: >-
+          Bynk release: exact ("0.403.3" or "v0.403.3"), "latest", or empty for
+          the one pinned in BYNK_VERSION.
+        type: string
+        default: ""
+    outputs:
+      tag:
+        description: The release tested, as a tag ("v0.403.3").
+        value: ${{ jobs.test.outputs.tag }}
+      version:
+        description: The release tested, as a bare version ("0.403.3").
+        value: ${{ jobs.test.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test against Bynk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: "22"
+          cache: npm
+      # fetch-assets.sh validates the tag's shape before it is used anywhere.
+      - name: Resolve the Bynk release
+        id: release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="$VERSION"
+          [ -n "$v" ] || v="$(tr -d '[:space:]' < BYNK_VERSION)"
+          if [ "$v" = latest ]; then
+            v="$(gh release view -R bynk-lang/bynk --json tagName --jq .tagName)"
+          fi
+          case "$v" in v*) ;; *) v="v$v" ;; esac
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
+          echo "version=${v#v}" >> "$GITHUB_OUTPUT"
+          echo "::notice::testing against Bynk $v"
+      - run: npm ci
+      - name: Stage the release's browser artefacts
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: npm run fetch:assets -- "$TAG"
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Unit tests + gallery examples
+        run: npm test
+      - name: Bundle
+        run: npm run build

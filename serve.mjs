@@ -1,7 +1,7 @@
 // Local static server for verification (in-browser track, slice 4). Serves dist/
 // on two ports so the app (8080) and the sandbox (8081) are genuinely
 // cross-origin — exercising the same postMessage boundary as the production
-// playground.bynk-lang.org / sandbox.bynk-lang.org split.
+// playground.bynk-lang.dev / sandbox.bynk-lang.dev split.
 //
 // Build for these origins first:
 //   BYNK_APP_ORIGIN=http://localhost:8080 BYNK_SANDBOX_ORIGIN=http://localhost:8081 node build.mjs
@@ -12,7 +12,7 @@ import { extname, join, normalize } from "node:path";
 const ROOT = new URL("./dist/", import.meta.url).pathname;
 // Same-origin share API (slice 5c): proxy `/api/*` on the app origin to the local
 // `wrangler dev` Worker, mirroring the production Cloudflare route
-// (`playground.bynk-lang.org/api/* → the snippets Worker`) so the browser never
+// (`playground.bynk-lang.dev/api/* → the snippets Worker`) so the browser never
 // makes a cross-origin call (Bynk's HTTP surface emits no CORS).
 const SHARE_WORKER = process.env.BYNK_SHARE_WORKER ?? "http://localhost:8799";
 const TYPES = {

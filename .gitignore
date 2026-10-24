@@ -1,5 +1,7 @@
 node_modules/
 dist/
-# Generated build artefacts: the wasm-bindgen glue + module (build-wasm.sh) and the
-# web-tree-sitter grammar (build-grammar.sh). Regenerated, never committed.
+# Generated build artefacts: the compiler wasm + glue and the
+# web-tree-sitter grammar, staged by scripts/fetch-assets.sh. Never committed.
 src/vendor/
+.wrangler/
+share/src/out/

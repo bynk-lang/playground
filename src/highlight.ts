@@ -2,11 +2,11 @@
 //
 // NOTE (in-browser track Q4): the intended end-state is highlighting from
 // `tree-sitter-bynk` compiled to web-tree-sitter wasm — the grammar + queries
-// already exist (`tree-sitter-bynk/queries/highlights.scm`) and `scripts/
-// build-grammar.sh` builds the wasm. At slice 4 that build needed `emcc` or a running
-// docker daemon, which the environment lacked, so the MVP shipped this faithful
-// stream highlighter; the tree-sitter CLI now fetches its own wasi-sdk, and this
-// remains the fallback when the grammar wasm is absent.
+// already exist (`tree-sitter-bynk/queries/highlights.scm` in bynk-lang/bynk). At
+// slice 4 that wasm build needed `emcc` or a running docker daemon, which the
+// environment lacked, so the MVP shipped this faithful stream highlighter; the
+// grammar wasm now comes in the release tarball (scripts/fetch-assets.sh), and this
+// remains the fallback when it is absent.
 
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";

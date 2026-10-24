@@ -1,0 +1,94 @@
+# Bynk canary: check the playground against a new Bynk release, keep a `canary`
+# issue open while it fails, and propose moving the pin once it passes.
+#
+# Triggered by the org dispatcher in bynk-lang/.github (on each Bynk release,
+# and weekly). This repository is listed in bynk-lang/.github's
+# canary/repos.json (kind `app`), and the canary GitHub App is installed on it.
+# See https://github.com/bynk-lang/.github/blob/main/canary/README.md
+#
+# `tests` runs test.yml (the app's own checks: unit tests, every gallery
+# example through the release's wasm compiler, the bundle) at the dispatched
+# release, and its result goes to canary.yml as `upstream-result`. canary.yml
+# also runs bynk-ci on the share service. When both pass with a release newer
+# than BYNK_VERSION, `bump` opens a pull request moving the pin to it.
+name: Bynk canary
+
+on:
+  repository_dispatch:
+    types: [bynk-canary]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Bynk version, exact ("0.403.3") or "latest"
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write # canary.yml reports with the run's GitHub OIDC token
+
+jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/test.yml
+    with:
+      version: ${{ github.event.client_payload.version || inputs.version || 'latest' }}
+
+  canary:
+    name: Canary
+    needs: tests
+    if: ${{ !cancelled() }}
+    uses: bynk-lang/.github/.github/workflows/canary.yml@v1
+    with:
+      version: ${{ needs.tests.outputs.version || github.event.client_payload.version || inputs.version || 'latest' }}
+      upstream-result: ${{ needs.tests.result }}
+      kind: app
+      working-directory: share
+      source: src
+
+  bump:
+    name: Propose the pin bump
+    needs: [tests, canary]
+    if: needs.canary.outputs.result == 'pass'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write # to start CI on the bump branch (below)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Open or update the bump pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tests.outputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::notice::$TAG is not a final release; the pin only moves to one"; exit 0; }
+          pinned="$(tr -d '[:space:]' < BYNK_VERSION)"
+          newest="$(printf '%s\n%s\n' "${pinned#v}" "${TAG#v}" | sort -V | tail -n1)"
+          if [ "$TAG" = "$pinned" ] || [ "$newest" != "${TAG#v}" ]; then
+            echo "::notice::BYNK_VERSION is $pinned; $TAG is not newer"
+            exit 0
+          fi
+          branch="canary/bynk-$TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          echo "$TAG" > BYNK_VERSION
+          git commit -am "Move the playground to Bynk $TAG"
+          git push --force origin "$branch"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --head "$branch" --title "Move the playground to Bynk $TAG" --body \
+              "The Bynk canary passed with [$TAG](https://github.com/bynk-lang/bynk/releases/tag/$TAG): the tests, every gallery example and the share service's bynk-ci gate ([run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Merging this deploys it."
+          fi
+          # One bump open at a time: this one supersedes any for an older release.
+          gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"canary/bynk-\")) | select(.headRefName != \"$branch\") | .number" \
+            | while read -r n; do
+                gh pr close "$n" --delete-branch --comment "Superseded by the bump to $TAG."
+              done
+          # A push made with GITHUB_TOKEN starts no workflows, but a dispatch
+          # does, so CI reports on the bump commit.
+          gh workflow run ci.yml --ref "$branch"
