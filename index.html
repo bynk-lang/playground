@@ -166,10 +166,26 @@
       .tour-actions { display: flex; gap: 8px; align-items: center; }
 
       /* Examples gallery */
-      dialog#gallery { width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 48px); padding: 16px;
+      dialog.sheet { max-height: calc(100vh - 48px); padding: 16px;
         background: var(--surface-raised); color: var(--ink); border: 1px solid var(--line-strong);
         border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
-      dialog#gallery::backdrop { background: rgba(0, 0, 0, 0.5); }
+      dialog.sheet::backdrop { background: rgba(0, 0, 0, 0.5); }
+      dialog#gallery { width: min(760px, calc(100vw - 24px)); }
+      dialog#share-sheet { width: min(460px, calc(100vw - 24px)); }
+      #share-url { flex: 1; min-width: 0; padding: 8px 12px; min-height: 40px; font: 400 13px var(--font-mono);
+        background: var(--surface-panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
+      .share-row { display: flex; gap: 8px; margin: 12px 0 8px; }
+      #share-status { margin: 0; min-height: 22px; font-weight: 600; color: var(--ink-muted); }
+      #share-status[data-kind="ok"] { color: var(--accent); }
+      #share-status[data-kind="error"] { color: var(--danger); }
+      #share-note { margin: 4px 0 8px; color: var(--ink-muted); }
+
+      /* Shared-snippet bar */
+      #shared-note { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface-raised);
+        border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
+      #shared-note[hidden] { display: none; }
+      #shared-note span { flex: 1; }
+      #app:has(#shared-note:not([hidden])) { grid-template-rows: auto auto 1fr; }
       .gallery-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
       .gallery-head h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 650; }
       #gallery-search { width: 100%; margin-bottom: 12px; padding: 8px 12px; min-height: 40px; font: 400 14px var(--font-sans);
@@ -213,6 +229,11 @@
           <button id="coach-dismiss">Got it</button>
         </div>
       </header>
+      <div id="shared-note" hidden>
+        <span><strong>Shared snippet.</strong> Fork it to edit your own copy: the original link never changes.</span>
+        <button id="fork">Fork</button>
+        <button id="shared-dismiss" class="link">Dismiss</button>
+      </div>
       <main>
         <section class="pane" aria-label="Editor">
           <div class="pane-head">
@@ -250,7 +271,20 @@
         </section>
         </div>
       </main>
-      <dialog id="gallery" aria-labelledby="gallery-title">
+      <dialog id="share-sheet" class="sheet" aria-labelledby="share-title">
+        <form method="dialog" class="gallery-head">
+          <h2 id="share-title">Share this snippet</h2>
+          <button class="link" value="close" aria-label="Close share dialog">Close</button>
+        </form>
+        <div class="share-row">
+          <input id="share-url" readonly aria-label="Link to this snippet" />
+          <button id="share-copy" class="primary" disabled>Copy</button>
+        </div>
+        <p id="share-status" role="status" aria-live="polite"></p>
+        <p id="share-note"></p>
+        <button id="share-hash" class="link" hidden>Use the self-contained link instead</button>
+      </dialog>
+      <dialog id="gallery" class="sheet" aria-labelledby="gallery-title">
         <form method="dialog" class="gallery-head">
           <h2 id="gallery-title">Examples</h2>
           <button class="link" value="close" aria-label="Close examples">Close</button>
