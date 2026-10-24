@@ -29,6 +29,13 @@ export interface TourStep {
   check: (o: TourOutcome) => string | null;
 }
 
+/// Where the tour should open: the first step not yet done, or the first step once
+/// every step is (so a finished learner can go round again).
+export function nextIncomplete(ids: string[], done: string[]): number {
+  const i = ids.findIndex((id) => !done.includes(id));
+  return i === -1 ? 0 : i;
+}
+
 const prelude = (ctx: string) => `context ${ctx}\n\nconsumes bynk { Logger }\n`;
 
 export const TOUR: TourStep[] = [

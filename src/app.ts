@@ -24,8 +24,8 @@ import type { CompileResult, Diagnostic, EmittedFile, RunReply } from "./shared"
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
 import { mountGallery } from "./gallery";
-import { clearDraft, loadDraft, loadRecent, rememberRun, saveDraft } from "./store";
-import { TOUR } from "./tour";
+import { clearDraft, loadDraft, loadRecent, loadTourDone, markTourDone, rememberRun, resetTourDone, saveDraft } from "./store";
+import { TOUR, nextIncomplete } from "./tour";
 import type { TourOutcome, TourStep } from "./tour";
 import { byteToUtf16Offset, utf16ToByteOffset } from "./positions";
 import init, { bynk_compile, bynk_analyze, bynk_hover, bynk_complete } from "./vendor/bynk_wasm.js";
@@ -613,6 +613,13 @@ function mountExamples(): void {
 let tourIndex = -1;
 let tourDone = false;
 
+// The Tour button says how far along the learner is.
+function updateTourButton(): void {
+  const done = loadTourDone().filter((id) => TOUR.some((s) => s.id === id)).length;
+  $("tour-btn").textContent = done === 0 ? "Tour" : done === TOUR.length ? "Tour ✓" : `Tour · ${done}/${TOUR.length}`;
+  $("tour-restart").hidden = done === 0;
+}
+
 function tourStep(): TourStep | undefined {
   return TOUR[tourIndex];
 }
@@ -647,12 +654,15 @@ function showTourStep(i: number, fresh = true): void {
   $("tour").hidden = false;
   dismissCoach();
   $("tour-btn").setAttribute("aria-pressed", "true");
+  const doneBefore = loadTourDone().includes(step.id);
   $("tour-count").textContent = `Tour · step ${i + 1} of ${TOUR.length}`;
   $("tour-title").textContent = step.title;
   renderProse($("tour-prose"), step.prose);
   renderProse($("tour-task"), step.task);
-  setTourFeedback("");
-  ($("tour-next") as HTMLButtonElement).disabled = true;
+  setTourFeedback(doneBefore ? "✓ You passed this step earlier." : "", doneBefore ? "ok" : "idle");
+  tourDone = doneBefore;
+  ($("tour-next") as HTMLButtonElement).disabled = !doneBefore;
+  updateTourButton();
   $("tour-next").textContent = i === TOUR.length - 1 ? "Finish" : "Next";
   window.history.replaceState(null, "", `${location.pathname}?tour=${encodeURIComponent(step.id)}`);
   if (!fresh) return;
@@ -674,6 +684,8 @@ async function checkTour(): Promise<void> {
   const miss = step.check(outcome);
   if (miss === null) {
     tourDone = true;
+    markTourDone(step.id);
+    updateTourButton();
     setTourFeedback("✓ Output matched. Well done.", "ok");
     ($("tour-next") as HTMLButtonElement).disabled = false;
   } else {
@@ -693,7 +705,14 @@ function nextTour(): void {
 }
 
 function mountTour(): void {
-  $("tour-btn").addEventListener("click", () => (tourIndex >= 0 ? exitTour() : showTourStep(0)));
+  $("tour-btn").addEventListener("click", () =>
+    tourIndex >= 0 ? exitTour() : showTourStep(nextIncomplete(TOUR.map((s) => s.id), loadTourDone())),
+  );
+  $("tour-restart").addEventListener("click", () => {
+    resetTourDone();
+    showTourStep(0);
+  });
+  updateTourButton();
   $("tour-exit").addEventListener("click", exitTour);
   $("tour-check").addEventListener("click", () => void checkTour());
   $("tour-next").addEventListener("click", nextTour);

@@ -8,13 +8,24 @@ import { runSource } from "./run-helper.mjs";
 
 const source = await readFile(new URL("../src/tour.ts", import.meta.url), "utf8");
 const { code } = await transform(source, { loader: "ts", format: "esm" });
-const { TOUR } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+const { TOUR, nextIncomplete } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
 
 const outcome = (r) => ({ compiled: r.ok, value: r.value, error: r.error });
 
 test("the tour has steps with unique ids", () => {
   assert.ok(TOUR.length > 0);
   assert.equal(new Set(TOUR.map((s) => s.id)).size, TOUR.length);
+});
+
+test("the tour opens at the first step not yet done", () => {
+  const ids = ["a", "b", "c"];
+  assert.equal(nextIncomplete(ids, []), 0);
+  assert.equal(nextIncomplete(ids, ["a"]), 1);
+  assert.equal(nextIncomplete(ids, ["a", "c"]), 1);
+});
+
+test("a finished tour opens at the start again", () => {
+  assert.equal(nextIncomplete(["a", "b"], ["a", "b"]), 0);
 });
 
 for (const step of TOUR) {

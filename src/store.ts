@@ -52,6 +52,25 @@ export function loadRecent(): RecentSnippet[] {
   }
 }
 
+const TOUR_KEY = "bynk-tour-done";
+
+/// Ids of the tour steps the learner has passed.
+export function loadTourDone(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(read(TOUR_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markTourDone(id: string): void {
+  const done = loadTourDone();
+  if (!done.includes(id)) write(TOUR_KEY, JSON.stringify([...done, id]));
+}
+
+export const resetTourDone = (): void => write(TOUR_KEY, null);
+
 export function rememberRun(src: string): void {
   write(RECENT_KEY, JSON.stringify(pushRecent(loadRecent(), src, Date.now())));
 }
