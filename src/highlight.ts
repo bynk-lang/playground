@@ -96,14 +96,14 @@ const bynk = StreamLanguage.define({
 
 // A dark highlight theme matching the playground shell.
 const style = HighlightStyle.define([
-  { tag: t.keyword, color: "#c792ea" },
-  { tag: t.typeName, color: "#82aaff" },
-  { tag: t.atom, color: "#f78c6c" },
-  { tag: t.string, color: "#c3e88d" },
-  { tag: t.number, color: "#f78c6c" },
-  { tag: t.comment, color: "#5c6370", fontStyle: "italic" },
-  { tag: t.operator, color: "#89ddff" },
-  { tag: t.variableName, color: "#eeffff" },
+  { tag: t.keyword, color: "var(--syn-keyword)" },
+  { tag: t.typeName, color: "var(--syn-type)" },
+  { tag: t.atom, color: "var(--syn-number)" },
+  { tag: t.string, color: "var(--syn-string)" },
+  { tag: t.number, color: "var(--syn-number)" },
+  { tag: t.comment, color: "var(--syn-comment)", fontStyle: "italic" },
+  { tag: t.operator, color: "var(--ink-muted)" },
+  { tag: t.variableName, color: "var(--ink)" },
 ]);
 
 export function bynkHighlighting(): Extension {
