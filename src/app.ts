@@ -20,7 +20,7 @@ import { bynkHighlighting } from "./highlight";
 import { bynkTreeSitterHighlighting } from "./tshighlight";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
 import { SANDBOX_ORIGIN } from "./shared";
-import type { CompileResult, Diagnostic, RunReply } from "./shared";
+import type { CompileResult, Diagnostic, EmittedFile, RunReply } from "./shared";
 import { EXAMPLES } from "./examples";
 import { byteToUtf16Offset, utf16ToByteOffset } from "./positions";
 import init, { bynk_compile, bynk_analyze, bynk_hover, bynk_complete } from "./vendor/bynk_wasm.js";
@@ -55,6 +55,7 @@ const bynkLinter = linter(
     } catch {
       return [];
     }
+    setDiagSummary(diags);
     // `from`/`to` are UTF-8 byte offsets; CodeMirror ranges are UTF-16 (#2126).
     // The conversion clamps to the document, so no further clamping is needed.
     return diags
@@ -183,9 +184,11 @@ function renderDiagnostics(diags: Diagnostic[]): void {
     const row = document.createElement("div");
     row.className = `diag diag-${d.severity}`;
     const loc = d.line ? `${d.line}:${d.col}` : "—";
+    // Click a row to jump the cursor to the offending span.
+    row.addEventListener("click", () => jumpTo(d));
     // `category` is a fixed compiler constant today; escape it too so this stays
     // injection-proof if a future diagnostic ever derives a category from source.
-    row.innerHTML = `<span class="diag-loc">${loc}</span> <span class="diag-cat">${escapeHtml(d.category)}</span> ${escapeHtml(d.message)}`;
+    row.innerHTML = `<span class="diag-sev">${d.severity === "error" ? "✕ error" : "▲ warning"}</span> <span class="diag-loc">${loc}</span> ${escapeHtml(d.message)} <span class="diag-cat">${escapeHtml(d.category)}</span>`;
     panel.appendChild(row);
   }
 }
@@ -194,7 +197,47 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] as string);
 }
 
-function renderOutput(reply: RunReply): void {
+type Tab = "result" | "logs" | "js";
+let activeTab: Tab = "result";
+// What the Results pane shows: the last run's reply and compiled files, or a
+// transient note ("compiling…") before a run has produced either.
+let lastReply: RunReply | undefined;
+let lastFiles: EmittedFile[] = [];
+let lastNote = "";
+
+function jumpTo(d: Diagnostic): void {
+  const text = source();
+  const pos = Math.min(byteToUtf16Offset(text, d.from), view.state.doc.length);
+  view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+  view.focus();
+}
+
+function setDiagSummary(diags: Diagnostic[]): void {
+  const el = $("diag-summary");
+  const errors = diags.filter((d) => d.severity === "error").length;
+  const warnings = diags.length - errors;
+  if (errors > 0) {
+    el.textContent = `✕ ${errors} error${errors === 1 ? "" : "s"}`;
+    el.dataset.kind = "error";
+  } else if (warnings > 0) {
+    el.textContent = `▲ ${warnings} warning${warnings === 1 ? "" : "s"}`;
+    el.dataset.kind = "warning";
+  } else {
+    el.textContent = "✓ No errors";
+    el.dataset.kind = "ok";
+  }
+}
+
+function selectTab(tab: Tab): void {
+  activeTab = tab;
+  for (const t of document.querySelectorAll<HTMLElement>("[role=tab]")) {
+    t.setAttribute("aria-selected", String(t.dataset.tab === tab));
+  }
+  $("output").setAttribute("aria-labelledby", `tab-${tab}`);
+  renderOutput();
+}
+
+function renderOutput(): void {
   const out = $("output");
   out.innerHTML = "";
   const add = (cls: string, text: string) => {
@@ -203,22 +246,51 @@ function renderOutput(reply: RunReply): void {
     line.textContent = text;
     out.appendChild(line);
   };
+  const logs = lastReply?.logs ?? [];
+  const badge = $("logs-badge");
+  badge.hidden = logs.length === 0;
+  badge.textContent = String(logs.length);
+
+  if (activeTab === "js") {
+    if (lastFiles.length === 0) {
+      add("out-empty", "Nothing compiled yet. Press Run to see the JavaScript Bynk emits.");
+      return;
+    }
+    for (const f of lastFiles) {
+      add("out-file", `// ${f.path}`);
+      add("out-code", f.contents);
+    }
+    return;
+  }
+
+  const reply = lastReply;
+  if (!reply) {
+    add("out-empty", lastNote || "Press Run to see the result here.");
+    return;
+  }
+  if (activeTab === "logs") {
+    if (logs.length === 0) add("out-empty", "This run logged nothing.");
+    for (const log of logs) add(log.level === "error" ? "out-error" : "out-log", log.message);
+    return;
+  }
+  // Result tab.
   if (reply.timedOut) {
-    add("out-error", `⏱ execution exceeded ${RUN_TIMEOUT_MS} ms and was terminated.`);
+    add("out-error", `✕ Execution exceeded ${RUN_TIMEOUT_MS} ms and was terminated.`);
+    add("out-note", "Check for a loop that never returns.");
     return;
   }
   if (reply.noEntry) {
-    add("out-note", "Compiled. No zero-argument service handler to run — add `on call() -> …` to see output.");
+    add("out-note", "Compiled. No zero-argument service handler to run: add `on call() -> …` to see output.");
     return;
   }
-  for (const log of reply.logs) {
-    add(log.level === "error" ? "out-error" : "out-log", log.message);
-  }
   if (reply.error) {
-    add("out-error", reply.error);
+    add("out-error", `✕ ${reply.error}`);
   } else if (reply.value !== undefined) {
     add("out-value", `⇒ ${reply.value}`);
+  } else {
+    add("out-note", "Ran with no return value.");
   }
+  if (logs.length > 0) add("out-note", `${logs.length} log line${logs.length === 1 ? "" : "s"}: see the Logs tab.`);
 }
 
 function showUnsupported(diags: Diagnostic[]): void {
@@ -234,7 +306,9 @@ function showUnsupported(diags: Diagnostic[]): void {
 
 async function compileAndRun(): Promise<void> {
   setStatus("compiling…", "busy");
-  $("output").innerHTML = "";
+  lastReply = undefined;
+  lastNote = "Compiling…";
+  renderOutput();
   let result: CompileResult;
   try {
     result = JSON.parse(bynk_compile(source())) as CompileResult;
@@ -247,9 +321,15 @@ async function compileAndRun(): Promise<void> {
   }
   renderDiagnostics(result.diagnostics);
   showUnsupported(result.diagnostics);
+  setDiagSummary(result.diagnostics);
+  lastFiles = result.ok ? result.files : [];
 
   if (!result.ok) {
-    setStatus(`${result.diagnostics.filter((d) => d.severity === "error").length} error(s)`, "error");
+    const n = result.diagnostics.filter((d) => d.severity === "error").length;
+    lastNote = `Fix the ${n} error${n === 1 ? "" : "s"} above, then run again.`;
+    renderOutput();
+    selectTab("result");
+    setStatus(`${n} error${n === 1 ? "" : "s"}`, "error");
     return;
   }
   if (!sandboxReady) {
@@ -268,8 +348,50 @@ async function compileAndRun(): Promise<void> {
       "*",
     );
   });
-  renderOutput(reply);
+  lastReply = reply;
+  renderOutput();
+  dismissCoach();
   setStatus(reply.error || reply.timedOut ? "run failed" : "ran", reply.error || reply.timedOut ? "error" : "ok");
+}
+
+// The first-run coachmark, shown until the first Run.
+function dismissCoach(): void {
+  $("coach").hidden = true;
+  try {
+    localStorage.setItem("bynk-coach", "1");
+  } catch {
+    // storage unavailable: the hint just reappears next visit
+  }
+}
+
+function showCoach(): void {
+  try {
+    if (localStorage.getItem("bynk-coach")) return;
+  } catch {
+    // fall through and show it
+  }
+  $("coach").hidden = false;
+}
+
+// Run the opening program once both the sandbox and the compiler are ready, so the
+// page greets a newcomer with output rather than an empty pane.
+let autoRan = false;
+function maybeFirstRun(): void {
+  if (autoRan || !sandboxReady || !wasmReady) return;
+  autoRan = true;
+  void compileAndRun();
+}
+
+function mountTheme(): void {
+  $("theme").addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("bynk-theme", next);
+    } catch {
+      // not persisted
+    }
+  });
 }
 
 async function copyAndReport(url: string): Promise<void> {
@@ -341,6 +463,7 @@ function mountExamples(): void {
       // The chosen example drops any shared-snippet URL (?s= / #hash) so a reshare
       // is clean. (`window.history`; the bare `history` is CodeMirror's editor history.)
       window.history.replaceState(null, "", location.pathname);
+      void compileAndRun();
     }
   });
 }
@@ -364,7 +487,7 @@ function makeEditor(doc: string): void {
         lintGutter(),
         bynkHover,
         autocompletion({ override: [bynkCompletions] }),
-        EditorView.theme({ "&": { height: "100%" }, ".cm-scroller": { overflow: "auto" } }, { dark: true }),
+        EditorView.theme({ "&": { height: "100%" }, ".cm-scroller": { overflow: "auto" } }, {}),
       ],
     }),
   });
@@ -387,6 +510,7 @@ function mountSandbox(): void {
     if (data?.kind === "bynk-sandbox-ready") {
       sandboxReady = true;
       setStatus("ready", "ok");
+      maybeFirstRun();
       return;
     }
     if (data?.kind === "bynk-result" && typeof data.id === "number") {
@@ -406,6 +530,13 @@ async function main(): Promise<void> {
   mountExamples();
   $("run").addEventListener("click", () => void compileAndRun());
   $("share").addEventListener("click", () => void share());
+  $("coach-dismiss").addEventListener("click", dismissCoach);
+  for (const t of document.querySelectorAll<HTMLElement>("[role=tab]")) {
+    t.addEventListener("click", () => selectTab(t.dataset.tab as Tab));
+  }
+  mountTheme();
+  showCoach();
+  renderOutput();
   // Load the wasm compiler. Resolve the module against the page URL (not
   // `import.meta.url`) so esbuild leaves the path alone and the `.wasm` is fetched
   // from the deploy root.
@@ -414,6 +545,7 @@ async function main(): Promise<void> {
   if (!sandboxReady) setStatus("compiler ready", "ok");
   // Lint the initial program now that the analyser is loaded.
   forceLinting(view);
+  maybeFirstRun();
 
   // Upgrade highlighting to web-tree-sitter once its wasm loads; on failure the
   // stream highlighter stays (slice 5b).

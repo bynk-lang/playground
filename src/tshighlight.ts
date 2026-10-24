@@ -41,18 +41,18 @@ function classFor(capture: string): string | null {
 
 // Colours for the classes above — the same palette as the stream highlighter.
 const tsTheme = EditorView.theme({
-  ".tok-keyword": { color: "#c792ea" },
-  ".tok-type": { color: "#82aaff" },
-  ".tok-constant": { color: "#f78c6c" },
-  ".tok-string": { color: "#c3e88d" },
-  ".tok-number": { color: "#f78c6c" },
-  ".tok-comment": { color: "#5c6370", fontStyle: "italic" },
-  ".tok-operator": { color: "#89ddff" },
-  ".tok-function": { color: "#82aaff" },
-  ".tok-namespace": { color: "#ffcb6b" },
-  ".tok-property": { color: "#eeffff" },
-  ".tok-variable": { color: "#eeffff" },
-  ".tok-punct": { color: "#89ddff" },
+  ".tok-keyword": { color: "var(--syn-keyword)" },
+  ".tok-type": { color: "var(--syn-type)" },
+  ".tok-constant": { color: "var(--syn-number)" },
+  ".tok-string": { color: "var(--syn-string)" },
+  ".tok-number": { color: "var(--syn-number)" },
+  ".tok-comment": { color: "var(--syn-comment)", fontStyle: "italic" },
+  ".tok-operator": { color: "var(--ink-muted)" },
+  ".tok-function": { color: "var(--syn-type)" },
+  ".tok-namespace": { color: "var(--syn-capability)" },
+  ".tok-property": { color: "var(--ink)" },
+  ".tok-variable": { color: "var(--ink)" },
+  ".tok-punct": { color: "var(--ink-muted)" },
 });
 
 async function initParser(): Promise<{ parser: Parser; query: Query } | null> {
