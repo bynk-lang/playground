@@ -124,7 +124,7 @@
       #results { display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
       #unsupported { background: var(--surface-raised); color: var(--brand-text); padding: 8px 12px;
         border-bottom: 1px solid var(--line); font-size: 13px; }
-      #diagnostics { border-bottom: 1px solid var(--line); max-height: 40%; overflow: auto; }
+      #diagnostics { border-bottom: 1px solid var(--line); max-height: 144px; overflow: auto; }
       #diagnostics.empty { display: none; }
       .diag { padding: 6px 12px; border-bottom: 1px solid var(--line); font: 400 12px/18px var(--font-mono); cursor: pointer; }
       .diag:last-child { border-bottom: 0; }
@@ -143,9 +143,53 @@
       .out-file { color: var(--ink-muted); margin-top: 12px; }
       .out-file:first-child { margin-top: 0; }
 
+      #right { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; min-height: 0; }
+      #right:has(#tour[hidden]) { grid-template-rows: minmax(0, 1fr); }
+      button.link { background: none; border: 0; min-height: 28px; padding: 2px 6px; color: var(--accent);
+        font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+      button:disabled { opacity: 0.55; cursor: not-allowed; }
+      #tour-btn[aria-pressed="true"] { border-color: var(--brand-text); color: var(--brand-text); }
+
+      /* Tour card */
+      .tour { background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
+        padding: 12px 16px 16px; }
+      .tour[hidden] { display: none; }
+      .tour-meta { display: flex; justify-content: space-between; align-items: center;
+        font: 600 12px/16px var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--brand-text); }
+      .tour h2 { font-size: 20px; line-height: 28px; font-weight: 650; margin: 4px 0; }
+      .tour p { margin: 0 0 8px; }
+      .tour code { font: 400 13px var(--font-mono); background: var(--surface-panel); padding: 0 4px; border-radius: 4px; }
+      .tour-task { font-weight: 600; }
+      #tour-feedback { min-height: 22px; color: var(--ink-muted); }
+      #tour-feedback[data-kind="ok"] { color: var(--accent); }
+      #tour-feedback[data-kind="miss"] { color: var(--brand-text); }
+      .tour-actions { display: flex; gap: 8px; align-items: center; }
+
+      /* Examples gallery */
+      dialog#gallery { width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 48px); padding: 16px;
+        background: var(--surface-raised); color: var(--ink); border: 1px solid var(--line-strong);
+        border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
+      dialog#gallery::backdrop { background: rgba(0, 0, 0, 0.5); }
+      .gallery-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+      .gallery-head h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 650; }
+      #gallery-search { width: 100%; margin-bottom: 12px; padding: 8px 12px; min-height: 40px; font: 400 14px var(--font-sans);
+        background: var(--surface-panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
+      #gallery-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+      .card { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-start; padding: 16px; background: var(--surface-panel);
+        border: 1px solid var(--line); border-radius: var(--radius-md); }
+      .card:hover { border-color: var(--ink-muted); }
+      .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .card[aria-current="true"] { border-color: var(--line-strong); }
+      .card-title { font-weight: 650; }
+      .card-blurb { color: var(--ink-muted); }
+      .card-peek { margin: 8px 0 0; font: 400 12px/18px var(--font-mono); color: var(--ink); white-space: pre; overflow: hidden; }
+      .card-current { color: var(--accent); font-size: 12px; font-weight: 600; margin-top: 8px; }
+
       /* Narrow screens: stack the panes */
       @media (max-width: 800px) {
-        main { grid-template-columns: 1fr; grid-template-rows: minmax(240px, 1fr) minmax(220px, 1fr); }
+        main { grid-template-columns: 1fr; grid-template-rows: minmax(240px, 1fr) auto; overflow: auto; }
+        #right { min-height: 320px; }
         header { flex-wrap: wrap; }
         #coach { left: 12px; }
         button, select { min-height: 40px; }
@@ -157,7 +201,8 @@
     <div id="app">
       <header>
         <h1 class="wordmark">Bynk<span>.</span></h1>
-        <select id="examples" title="Load an example" aria-label="Examples"></select>
+        <button id="examples" aria-haspopup="dialog" title="Browse examples">Examples</button>
+        <button id="tour-btn" title="A short guided tour of Bynk">Tour</button>
         <button id="run" class="primary" title="Compile &amp; run (⌘/Ctrl+Enter)">▶ Run<kbd>Ctrl+Enter</kbd></button>
         <button id="share" title="Copy a link to this snippet">Share</button>
         <span class="spacer"></span>
@@ -176,6 +221,19 @@
           </div>
           <div id="editor"></div>
         </section>
+        <div id="right">
+        <section id="tour" class="tour" aria-label="Guided tour" hidden>
+          <div class="tour-meta"><span id="tour-count"></span><button id="tour-exit" class="link">Exit tour</button></div>
+          <h2 id="tour-title"></h2>
+          <p id="tour-prose"></p>
+          <p class="tour-task" id="tour-task"></p>
+          <p id="tour-feedback" role="status" aria-live="polite"></p>
+          <div class="tour-actions">
+            <button id="tour-check" class="primary">Check</button>
+            <button id="tour-next" disabled>Next</button>
+            <button id="tour-solution" class="link">Show solution</button>
+          </div>
+        </section>
         <section class="pane" aria-label="Results">
           <div class="pane-head">
             <div role="tablist" aria-label="Results">
@@ -190,7 +248,17 @@
             <div id="output" role="tabpanel" aria-labelledby="tab-result"></div>
           </div>
         </section>
+        </div>
       </main>
+      <dialog id="gallery" aria-labelledby="gallery-title">
+        <form method="dialog" class="gallery-head">
+          <h2 id="gallery-title">Examples</h2>
+          <button class="link" value="close" aria-label="Close examples">Close</button>
+        </form>
+        <input id="gallery-search" type="search" placeholder="Search examples" aria-label="Search examples" autocomplete="off" />
+        <div id="gallery-grid" class="gallery-grid"></div>
+        <p id="gallery-empty" class="out-empty" hidden>No example matches that search.</p>
+      </dialog>
     </div>
     <script type="module" src="./app.js"></script>
   </body>

@@ -8,6 +8,8 @@
 export interface Example {
   id: string;
   title: string;
+  /// One line on what the example teaches (shown in the gallery).
+  blurb: string;
   source: string;
 }
 
@@ -15,6 +17,7 @@ export const EXAMPLES: Example[] = [
   {
     id: "hello",
     title: "Hello, world",
+    blurb: "The smallest service: log a line and return a value.",
     source: `context hello.world
 
 consumes bynk { Logger }
@@ -30,6 +33,7 @@ service greet {
   {
     id: "dice",
     title: "Capabilities — Random & Logger",
+    blurb: "Capabilities a handler must declare before it can use them.",
     source: `context demo.dice
 
 consumes bynk { Random, Logger }
@@ -46,6 +50,7 @@ service roll {
   {
     id: "records",
     title: "Records",
+    blurb: "Group named fields into a record type.",
     source: `context demo.records
 
 consumes bynk { Logger }
@@ -63,6 +68,7 @@ service make {
   {
     id: "lights",
     title: "Sum types & match",
+    blurb: "An enum, and a match the compiler checks is complete.",
     source: `context demo.lights
 
 consumes bynk { Logger }
@@ -84,6 +90,7 @@ service next {
   {
     id: "slug",
     title: "Refined types",
+    blurb: "A String with a rule attached, validated at the boundary.",
     source: `context demo.slug
 
 consumes bynk { Logger }
