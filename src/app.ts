@@ -403,19 +403,66 @@ function mountTheme(): void {
   });
 }
 
-async function copyAndReport(url: string): Promise<void> {
+// --- Share sheet -----------------------------------------------------------------
+// The sheet offers a short `?s=<id>` link from the share service when it is up, and
+// always the self-contained `#hash` link (no server, never expires).
+interface ShareLinks {
+  short?: string;
+  hash: string;
+}
+let shareLinks: ShareLinks | null = null;
+
+function setShareStatus(text: string, kind: "idle" | "ok" | "error" = "idle"): void {
+  const el = $("share-status");
+  el.textContent = text;
+  el.dataset.kind = kind;
+}
+
+async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(url);
-    setStatus("link copied", "ok");
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch {
-    setStatus("link in address bar", "ok");
+    return false;
+  }
+}
+
+// Show `url` in the sheet, put it in the address bar, and copy it.
+async function presentShareLink(url: string, kind: "short" | "hash"): Promise<void> {
+  const input = $("share-url") as HTMLInputElement;
+  input.value = url;
+  window.history.replaceState(null, "", url);
+  ($("share-copy") as HTMLButtonElement).disabled = false;
+  $("share-note").textContent =
+    kind === "short"
+      ? "Short links expire after 30 days. The self-contained link never expires."
+      : "Self-contained link: the whole program is in the URL, so it needs no server and never expires.";
+  $("share-hash").hidden = !(kind === "short" && shareLinks?.hash);
+  // Clipboard access can be denied (insecure context, permissions): then leave the
+  // link selected in the box so Ctrl/Cmd+C works.
+  if (await copyText(url)) {
+    setShareStatus("✓ Link copied", "ok");
+  } else {
+    setShareStatus("Copy the link from the box.");
+    input.select();
   }
 }
 
 async function share(): Promise<void> {
   const src = source();
-  // Prefer a short `?s=<id>` link via the same-origin share service (slice 5c);
-  // fall back to the self-contained `#hash` link if the service is unavailable.
+  const dialog = $("share-sheet") as HTMLDialogElement;
+  shareLinks = null;
+  ($("share-url") as HTMLInputElement).value = "";
+  ($("share-copy") as HTMLButtonElement).disabled = true;
+  $("share-note").textContent = "";
+  $("share-hash").hidden = true;
+  setShareStatus("Creating link…");
+  dialog.showModal();
+
+  const hash = `${location.origin}${location.pathname}#${await encodeSnippet(src)}`;
+  let short: string | undefined;
+  // Prefer a short link via the same-origin share service; the hash link is the
+  // fallback, so the playground works without the service.
   try {
     const res = await fetch("/api/snippets", {
       method: "POST",
@@ -424,17 +471,50 @@ async function share(): Promise<void> {
     });
     if (res.ok) {
       const { id } = (await res.json()) as { id: string };
-      const url = `${location.origin}${location.pathname}?s=${encodeURIComponent(id)}`;
-      window.history.replaceState(null, "", url);
-      await copyAndReport(url);
-      return;
+      short = `${location.origin}${location.pathname}?s=${encodeURIComponent(id)}`;
     }
   } catch {
-    // network/Worker error — fall through to the hash form
+    // network/Worker error: use the hash link
   }
-  const url = `${location.origin}${location.pathname}#${await encodeSnippet(src)}`;
-  window.history.replaceState(null, "", url);
-  await copyAndReport(url);
+  shareLinks = { short, hash };
+  hideSharedNote();
+  await presentShareLink(short ?? hash, short ? "short" : "hash");
+}
+
+function mountShareSheet(): void {
+  const dialog = $("share-sheet") as HTMLDialogElement;
+  $("share-copy").addEventListener("click", async () => {
+    const input = $("share-url") as HTMLInputElement;
+    setShareStatus((await copyText(input.value)) ? "✓ Link copied" : "Copy it from the box.", "ok");
+    input.select();
+  });
+  $("share-hash").addEventListener("click", () => {
+    if (shareLinks) void presentShareLink(shareLinks.hash, "hash");
+  });
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+  dialog.addEventListener("close", () => $("share").focus());
+}
+
+// --- Shared snippets --------------------------------------------------------------
+// A snippet opened from a link is the author's, and links never change. Fork drops
+// the share URL so the editor is plainly the reader's own copy.
+let openedShared = false;
+
+function hideSharedNote(): void {
+  $("shared-note").hidden = true;
+}
+
+function mountSharedNote(): void {
+  if (openedShared) $("shared-note").hidden = false;
+  $("shared-dismiss").addEventListener("click", hideSharedNote);
+  $("fork").addEventListener("click", () => {
+    window.history.replaceState(null, "", location.pathname);
+    hideSharedNote();
+    setStatus("forked: this is your copy", "ok");
+    view.focus();
+  });
 }
 
 // The initial program: a `?s=<id>` shared snippet (via the service), else a `#hash`
@@ -446,12 +526,17 @@ async function loadInitialSource(): Promise<string> {
   if (id) {
     try {
       const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`);
-      if (res.ok) return ((await res.json()) as { source: string }).source;
+      if (res.ok) {
+        openedShared = true;
+        return ((await res.json()) as { source: string }).source;
+      }
     } catch {
       // fall through to the hash / default
     }
   }
-  return (await decodeSnippet(location.hash)) ?? DEFAULT_SOURCE;
+  const fromHash = await decodeSnippet(location.hash);
+  if (fromHash !== null && fromHash !== undefined) openedShared = true;
+  return fromHash ?? DEFAULT_SOURCE;
 }
 
 function setEditorContent(src: string): void {
@@ -642,6 +727,8 @@ async function main(): Promise<void> {
   makeEditor(await loadInitialSource());
   mountExamples();
   mountTour();
+  mountShareSheet();
+  mountSharedNote();
   $("run").addEventListener("click", () => void compileAndRun());
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
