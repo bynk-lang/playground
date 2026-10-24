@@ -22,6 +22,10 @@ import { encodeSnippet, decodeSnippet } from "./deeplink";
 import { SANDBOX_ORIGIN } from "./shared";
 import type { CompileResult, Diagnostic, EmittedFile, RunReply } from "./shared";
 import { EXAMPLES } from "./examples";
+import type { Example } from "./examples";
+import { mountGallery } from "./gallery";
+import { TOUR } from "./tour";
+import type { TourOutcome, TourStep } from "./tour";
 import { byteToUtf16Offset, utf16ToByteOffset } from "./positions";
 import init, { bynk_compile, bynk_analyze, bynk_hover, bynk_complete } from "./vendor/bynk_wasm.js";
 
@@ -304,7 +308,7 @@ function showUnsupported(diags: Diagnostic[]): void {
   }
 }
 
-async function compileAndRun(): Promise<void> {
+async function compileAndRun(): Promise<TourOutcome> {
   setStatus("compiling…", "busy");
   lastReply = undefined;
   lastNote = "Compiling…";
@@ -317,7 +321,7 @@ async function compileAndRun(): Promise<void> {
     renderDiagnostics([
       { path: null, line: 0, col: 0, from: 0, to: 0, severity: "error", category: "bynk.wasm", message: String(e) },
     ]);
-    return;
+    return { compiled: false };
   }
   renderDiagnostics(result.diagnostics);
   showUnsupported(result.diagnostics);
@@ -330,11 +334,11 @@ async function compileAndRun(): Promise<void> {
     renderOutput();
     selectTab("result");
     setStatus(`${n} error${n === 1 ? "" : "s"}`, "error");
-    return;
+    return { compiled: false };
   }
   if (!sandboxReady) {
     setStatus("sandbox not ready", "error");
-    return;
+    return { compiled: true, error: "sandbox not ready" };
   }
 
   setStatus("running…", "busy");
@@ -352,6 +356,11 @@ async function compileAndRun(): Promise<void> {
   renderOutput();
   dismissCoach();
   setStatus(reply.error || reply.timedOut ? "run failed" : "ran", reply.error || reply.timedOut ? "error" : "ok");
+  return {
+    compiled: true,
+    value: reply.value,
+    error: reply.error ?? (reply.timedOut ? "timed out" : undefined),
+  };
 }
 
 // The first-run coachmark, shown until the first Run.
@@ -431,6 +440,8 @@ async function share(): Promise<void> {
 // The initial program: a `?s=<id>` shared snippet (via the service), else a `#hash`
 // snippet, else the default example.
 async function loadInitialSource(): Promise<string> {
+  const t = initialTourIndex();
+  if (t >= 0) return TOUR[t].starter;
   const id = new URLSearchParams(location.search).get("s");
   if (id) {
     try {
@@ -448,24 +459,126 @@ function setEditorContent(src: string): void {
   view.focus();
 }
 
+// The example last loaded from the gallery, shown as "Current" there.
+let currentExampleId: string | null = EXAMPLES[0].id;
+
+function loadSnippet(src: string): void {
+  setEditorContent(src);
+  // Loading a snippet drops any shared-snippet URL (?s= / #hash) so a reshare is
+  // clean. (`window.history`; the bare `history` is CodeMirror's editor history.)
+  window.history.replaceState(null, "", location.pathname);
+  void compileAndRun();
+}
+
 function mountExamples(): void {
-  const sel = $("examples") as HTMLSelectElement;
-  for (const ex of EXAMPLES) {
-    const opt = document.createElement("option");
-    opt.value = ex.id;
-    opt.textContent = ex.title;
-    sel.appendChild(opt);
-  }
-  sel.addEventListener("change", () => {
-    const ex = EXAMPLES.find((e) => e.id === sel.value);
-    if (ex) {
-      setEditorContent(ex.source);
-      // The chosen example drops any shared-snippet URL (?s= / #hash) so a reshare
-      // is clean. (`window.history`; the bare `history` is CodeMirror's editor history.)
-      window.history.replaceState(null, "", location.pathname);
-      void compileAndRun();
+  mountGallery({
+    currentId: () => currentExampleId,
+    onPick: (ex: Example) => {
+      exitTour();
+      currentExampleId = ex.id;
+      loadSnippet(ex.source);
+    },
+  });
+}
+
+// --- Guided tour -----------------------------------------------------------------
+let tourIndex = -1;
+let tourDone = false;
+
+function tourStep(): TourStep | undefined {
+  return TOUR[tourIndex];
+}
+
+function setTourFeedback(text: string, kind: "ok" | "miss" | "idle" = "idle"): void {
+  const el = $("tour-feedback");
+  renderProse(el, text);
+  el.dataset.kind = kind;
+}
+
+// Render `backticked` words as <code> without ever treating the prose as HTML.
+function renderProse(el: HTMLElement, text: string): void {
+  el.textContent = "";
+  text.split("`").forEach((part, i) => {
+    if (i % 2 === 1) {
+      const code = document.createElement("code");
+      code.textContent = part;
+      el.append(code);
+    } else {
+      el.append(part);
     }
   });
+}
+
+// `fresh` is false when the page opened on this step: the editor already holds the
+// starter and the first-run path runs it once the compiler is ready.
+function showTourStep(i: number, fresh = true): void {
+  const step = TOUR[i];
+  tourIndex = i;
+  tourDone = false;
+  currentExampleId = null;
+  $("tour").hidden = false;
+  dismissCoach();
+  $("tour-btn").setAttribute("aria-pressed", "true");
+  $("tour-count").textContent = `Tour · step ${i + 1} of ${TOUR.length}`;
+  $("tour-title").textContent = step.title;
+  renderProse($("tour-prose"), step.prose);
+  renderProse($("tour-task"), step.task);
+  setTourFeedback("");
+  ($("tour-next") as HTMLButtonElement).disabled = true;
+  $("tour-next").textContent = i === TOUR.length - 1 ? "Finish" : "Next";
+  window.history.replaceState(null, "", `${location.pathname}?tour=${encodeURIComponent(step.id)}`);
+  if (!fresh) return;
+  setEditorContent(step.starter);
+  void compileAndRun();
+}
+
+function exitTour(): void {
+  tourIndex = -1;
+  $("tour").hidden = true;
+  $("tour-btn").setAttribute("aria-pressed", "false");
+}
+
+async function checkTour(): Promise<void> {
+  const step = tourStep();
+  if (!step) return;
+  setTourFeedback("Checking…");
+  const outcome = await compileAndRun();
+  const miss = step.check(outcome);
+  if (miss === null) {
+    tourDone = true;
+    setTourFeedback("✓ Output matched. Well done.", "ok");
+    ($("tour-next") as HTMLButtonElement).disabled = false;
+  } else {
+    setTourFeedback(outcome.compiled ? miss : `${miss} ${step.hint}`, "miss");
+  }
+}
+
+function nextTour(): void {
+  if (!tourDone) return;
+  if (tourIndex === TOUR.length - 1) {
+    exitTour();
+    setStatus("tour complete", "ok");
+    window.history.replaceState(null, "", location.pathname);
+    return;
+  }
+  showTourStep(tourIndex + 1);
+}
+
+function mountTour(): void {
+  $("tour-btn").addEventListener("click", () => (tourIndex >= 0 ? exitTour() : showTourStep(0)));
+  $("tour-exit").addEventListener("click", exitTour);
+  $("tour-check").addEventListener("click", () => void checkTour());
+  $("tour-next").addEventListener("click", nextTour);
+  $("tour-solution").addEventListener("click", () => {
+    const step = tourStep();
+    if (step) setEditorContent(step.solution);
+  });
+}
+
+// `?tour=<id>` opens the tour at that step.
+function initialTourIndex(): number {
+  const id = new URLSearchParams(location.search).get("tour");
+  return id ? TOUR.findIndex((s) => s.id === id) : -1;
 }
 
 function makeEditor(doc: string): void {
@@ -528,6 +641,7 @@ async function main(): Promise<void> {
   mountSandbox();
   makeEditor(await loadInitialSource());
   mountExamples();
+  mountTour();
   $("run").addEventListener("click", () => void compileAndRun());
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
@@ -537,6 +651,10 @@ async function main(): Promise<void> {
   mountTheme();
   showCoach();
   renderOutput();
+  const t0 = initialTourIndex();
+  if (t0 >= 0) {
+    showTourStep(t0, false);
+  }
   // Load the wasm compiler. Resolve the module against the page URL (not
   // `import.meta.url`) so esbuild leaves the path alone and the `.wasm` is fetched
   // from the deploy root.

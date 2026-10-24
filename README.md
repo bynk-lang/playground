@@ -22,6 +22,8 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 |---|---|
 | `src/app.ts` | The app: editor (CodeMirror 6), compile, diagnostics, run, deep-link, Share, examples picker. |
 | `src/examples.ts` | The examples gallery — curated, **runnable** in-process snippets; the header picker loads them. `test/examples.test.mjs` compiles and runs every one. |
+| `src/gallery.ts` | The searchable examples dialog (cards with a blurb and code peek). |
+| `src/tour.ts` | The guided tour: five small programs to fix, each with a `check`. `test/tour.test.mjs` proves every starter fails its check and every solution passes. |
 | `src/sandbox.ts` | The execution document: links the JS graph to blob-URL modules, runs it in a Worker under a wall-clock timeout, posts results back. |
 | live diagnostics | A CodeMirror linter (in `src/app.ts`) calls `bynk_analyze` (debounced, on-type) → inline squiggles + gutter. Non-bailing — type errors in a context show live, not only on Run. |
 | hover + completion | `src/app.ts` calls `bynk_hover` (the inferred type at the cursor) and `bynk_complete` (context-aware candidates). |
