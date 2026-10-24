@@ -24,6 +24,7 @@ import type { CompileResult, Diagnostic, EmittedFile, RunReply } from "./shared"
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
 import { mountGallery } from "./gallery";
+import { clearDraft, loadDraft, loadRecent, rememberRun, saveDraft } from "./store";
 import { TOUR } from "./tour";
 import type { TourOutcome, TourStep } from "./tour";
 import { byteToUtf16Offset, utf16ToByteOffset } from "./positions";
@@ -308,7 +309,9 @@ function showUnsupported(diags: Diagnostic[]): void {
   }
 }
 
-async function compileAndRun(): Promise<TourOutcome> {
+// `remember`: the user asked for this run, so it is worth listing under Recent (not an
+// automatic first run, an example or a tour starter).
+async function compileAndRun(remember = false): Promise<TourOutcome> {
   setStatus("compiling…", "busy");
   lastReply = undefined;
   lastNote = "Compiling…";
@@ -341,6 +344,7 @@ async function compileAndRun(): Promise<TourOutcome> {
     return { compiled: true, error: "sandbox not ready" };
   }
 
+  if (remember) rememberRun(source());
   setStatus("running…", "busy");
   const id = ++runSeq;
   const reply = await new Promise<RunReply>((resolve) => {
@@ -501,9 +505,32 @@ function mountShareSheet(): void {
 // A snippet opened from a link is the author's, and links never change. Fork drops
 // the share URL so the editor is plainly the reader's own copy.
 let openedShared = false;
+let restoredDraft = false;
+let draftTimer: number | undefined;
 
 function hideSharedNote(): void {
   $("shared-note").hidden = true;
+}
+
+// Save the editor's contents shortly after the last keystroke. Skipped during the
+// tour (its starters are not the learner's own work).
+function scheduleDraftSave(): void {
+  window.clearTimeout(draftTimer);
+  draftTimer = window.setTimeout(() => {
+    if (tourIndex < 0) saveDraft(source());
+  }, 400);
+}
+
+function mountRestoredNote(): void {
+  const note = $("restored-note");
+  if (restoredDraft) note.hidden = false;
+  $("restored-dismiss").addEventListener("click", () => (note.hidden = true));
+  $("start-fresh").addEventListener("click", () => {
+    clearDraft();
+    note.hidden = true;
+    currentExampleId = EXAMPLES[0].id;
+    loadSnippet(DEFAULT_SOURCE);
+  });
 }
 
 function mountSharedNote(): void {
@@ -535,8 +562,18 @@ async function loadInitialSource(): Promise<string> {
     }
   }
   const fromHash = await decodeSnippet(location.hash);
-  if (fromHash !== null && fromHash !== undefined) openedShared = true;
-  return fromHash ?? DEFAULT_SOURCE;
+  if (fromHash !== null && fromHash !== undefined) {
+    openedShared = true;
+    return fromHash;
+  }
+  // No link: pick up where the last visit left off.
+  const draft = loadDraft();
+  if (draft && draft.trim() !== "" && draft !== DEFAULT_SOURCE) {
+    restoredDraft = true;
+    currentExampleId = null;
+    return draft;
+  }
+  return DEFAULT_SOURCE;
 }
 
 function setEditorContent(src: string): void {
@@ -562,6 +599,12 @@ function mountExamples(): void {
       exitTour();
       currentExampleId = ex.id;
       loadSnippet(ex.source);
+    },
+    recent: loadRecent,
+    onPickRecent: (r) => {
+      exitTour();
+      currentExampleId = null;
+      loadSnippet(r.src);
     },
   });
 }
@@ -676,10 +719,13 @@ function makeEditor(doc: string): void {
         highlightActiveLine(),
         history(),
         keymap.of([
-          { key: "Mod-Enter", run: () => (void compileAndRun(), true) },
+          { key: "Mod-Enter", run: () => (void compileAndRun(true), true) },
           ...defaultKeymap,
           ...historyKeymap,
         ]),
+        EditorView.updateListener.of((u) => {
+          if (u.docChanged) scheduleDraftSave();
+        }),
         highlightCompartment.of(bynkHighlighting()),
         bynkLinter,
         lintGutter(),
@@ -729,7 +775,8 @@ async function main(): Promise<void> {
   mountTour();
   mountShareSheet();
   mountSharedNote();
-  $("run").addEventListener("click", () => void compileAndRun());
+  mountRestoredNote();
+  $("run").addEventListener("click", () => void compileAndRun(true));
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
   for (const t of document.querySelectorAll<HTMLElement>("[role=tab]")) {
