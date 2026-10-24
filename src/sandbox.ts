@@ -77,7 +77,7 @@ function linkGraph(files: EmittedFile[]): { entry: string | null; urls: string[]
   return { entry: entry ?? null, urls: created };
 }
 
-// The Worker bootstrap (a module, instantiated from a blob): imports the linked
+// The Worker bootstrap (a classic script, instantiated from a blob): imports the linked
 // entry, instantiates the composition root, invokes the single zero-argument
 // service handler, and reports captured logs + the returned value. Console output
 // (the `Logger` provider) is intercepted in-Worker.
@@ -142,7 +142,12 @@ function run(req: RunRequest): void {
   }
 
   const workerUrl = URL.createObjectURL(new Blob([WORKER_SRC], { type: "text/javascript" }));
-  const worker = new Worker(workerUrl, { type: "module" });
+  // A classic Worker, not `{ type: "module" }`: Chromium refuses to start a module
+  // Worker from a blob URL created in this opaque-origin document (onerror, no
+  // message), so Run always failed with "worker error". A classic Worker's dynamic
+  // `import()` of the blob-URL graph works, and the bootstrap has no top-level
+  // module syntax.
+  const worker = new Worker(workerUrl);
   let settled = false;
   const cleanup = () => {
     urls.forEach(URL.revokeObjectURL);

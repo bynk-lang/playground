@@ -51,7 +51,7 @@ await esbuild.build({ ...common, entryPoints: { app: "src/app.ts" }, format: "es
 // origin**. A `type="module"` script there is fetched in CORS mode and a null origin
 // can't load it; a **classic IIFE script is exempt** (no-cors), so the opaque-origin
 // isolation is kept without serving CORS headers. Dynamic `import()` of the blob-URL
-// graph + the module Worker still work (blob: is local, not CORS-gated).
+// graph from the (classic) Worker still works (blob: is local, not CORS-gated).
 await esbuild.build({ ...common, entryPoints: { sandbox: "src/sandbox.ts" }, format: "iife" });
 
 // Static assets + the wasm module (fetched at runtime from the deploy root).
