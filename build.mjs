@@ -10,8 +10,11 @@ import { cp, mkdir, rm } from "node:fs/promises";
 const appOrigin = process.env.BYNK_APP_ORIGIN ?? "https://playground.bynk-lang.dev";
 const sandboxOrigin = process.env.BYNK_SANDBOX_ORIGIN ?? "https://sandbox.bynk-lang.dev";
 
-await rm("dist", { recursive: true, force: true });
-await mkdir("dist", { recursive: true });
+// BYNK_OUT_DIR lets the browser tests build beside the real dist/ (test/e2e).
+const OUT = process.env.BYNK_OUT_DIR ?? "dist";
+
+await rm(OUT, { recursive: true, force: true });
+await mkdir(OUT, { recursive: true });
 
 const define = {
   __APP_ORIGIN__: JSON.stringify(appOrigin),
@@ -34,7 +37,7 @@ const nodeStub = {
 };
 const common = {
   bundle: true,
-  outdir: "dist",
+  outdir: OUT,
   target: "es2022",
   sourcemap: true,
   minify: process.env.BYNK_MINIFY === "1",
@@ -55,20 +58,20 @@ await esbuild.build({ ...common, entryPoints: { app: "src/app.ts" }, format: "es
 await esbuild.build({ ...common, entryPoints: { sandbox: "src/sandbox.ts" }, format: "iife" });
 
 // Static assets + the wasm module (fetched at runtime from the deploy root).
-await cp("index.html", "dist/index.html");
-await cp("sandbox.html", "dist/sandbox.html");
+await cp("index.html", `${OUT}/index.html`);
+await cp("sandbox.html", `${OUT}/sandbox.html`);
 // The self-hosted code font (JetBrainsMono Nerd Font, trimmed; see fonts/README.md).
-await cp("fonts", "dist/fonts", { recursive: true });
-await cp("src/vendor/bynk_wasm_bg.wasm", "dist/bynk_wasm_bg.wasm");
+await cp("fonts", `${OUT}/fonts`, { recursive: true });
+await cp("src/vendor/bynk_wasm_bg.wasm", `${OUT}/bynk_wasm_bg.wasm`);
 // web-tree-sitter highlighting (slice 5b): the runtime + grammar wasm, fetched at
 // runtime from the deploy root. Optional — the app falls back to the stream
 // highlighter if these are absent (e.g. the grammar wasn't built).
 for (const w of ["tree-sitter.wasm", "tree-sitter-bynk.wasm"]) {
   try {
-    await cp(`src/vendor/${w}`, `dist/${w}`);
+    await cp(`src/vendor/${w}`, `${OUT}/${w}`);
   } catch {
     console.warn(`note: src/vendor/${w} missing — run \`npm run fetch:assets\` for web-tree-sitter highlighting`);
   }
 }
 
-console.log(`built dist/  (app=${appOrigin}  sandbox=${sandboxOrigin})`);
+console.log(`built ${OUT}/  (app=${appOrigin}  sandbox=${sandboxOrigin})`);

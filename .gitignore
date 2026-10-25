@@ -5,3 +5,4 @@ dist/
 src/vendor/
 .wrangler/
 share/src/out/
+.e2e-dist/
