@@ -879,7 +879,8 @@ function mountSandbox(): void {
   iframe.id = "sandbox";
   // Distinct origin + opaque sandbox: even a sandbox escape lands on a bare origin.
   iframe.setAttribute("sandbox", "allow-scripts");
-  iframe.src = `${SANDBOX_ORIGIN}/sandbox.html`;
+  // `/sandbox`, not `/sandbox.html`: the Workers assets redirect the `.html` form (#32).
+  iframe.src = `${SANDBOX_ORIGIN}/sandbox`;
   iframe.hidden = true;
   document.body.appendChild(iframe);
 

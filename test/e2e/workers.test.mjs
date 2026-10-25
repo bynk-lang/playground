@@ -40,7 +40,7 @@ test("the page runs a snippet through the sandbox Worker", { skip, timeout: 1200
   await settled();
   assert.equal(await page.text("#status"), "ran");
   assert.match(await page.text("#output"), /⇒ Hello from Bynk!/);
-  assert.equal(await page.eval(`document.getElementById("sandbox").src`), `${workers.sandboxOrigin}/sandbox.html`);
+  assert.equal(await page.eval(`document.getElementById("sandbox").src`), `${workers.sandboxOrigin}/sandbox`);
 });
 
 test("the sandbox origin serves only the execution document and sends the rest to the app", { skip }, async () => {
@@ -59,6 +59,13 @@ test("the sandbox origin serves only the execution document and sends the rest t
   assert.equal(html.status, 307, "the platform's clean-URL redirect, not ours");
   // The platform may send the location relative or absolute: both mean this same origin.
   assert.equal(new URL(html.headers.get("location"), workers.sandboxOrigin).href, `${workers.sandboxOrigin}/sandbox`);
+});
+
+test("the app origin refuses the sandbox's files, so untrusted code never runs there", { skip }, async () => {
+  for (const path of ["/sandbox", "/sandbox.html", "/sandbox.js", "/sandbox.js.map"]) {
+    const res = await fetch(workers.appOrigin + path, { redirect: "manual" });
+    assert.equal(res.status, 404, path);
+  }
 });
 
 test("Share makes a short link through the app Worker and the SHARE binding", { skip }, async () => {
