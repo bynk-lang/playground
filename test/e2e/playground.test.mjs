@@ -124,6 +124,17 @@ test("a slow run that ends after a later one never replaces the later result", {
   assert.equal(await status(), "ran");
 });
 
+test("a run that times out still shows what it logged first", { skip }, async () => {
+  await fresh();
+  await page.goto("about:blank");
+  await page.goto(hashLink(SLOW));
+  await page.waitFor(`document.getElementById("status").textContent === "run failed"`, "the run to time out", 10000);
+  assert.match(await page.text("#output"), /exceeded 3000 ms[\s\S]*logged 1 line first/);
+  assert.equal(await page.text("#logs-badge"), "1");
+  await page.click("#tab-logs");
+  assert.match(await page.text("#output"), /slow/);
+});
+
 test("Ctrl+Enter runs from outside the editor", { skip }, async () => {
   await fresh();
   await page.eval(`document.getElementById("share").focus(); document.getElementById("output").textContent = ""`);

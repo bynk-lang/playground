@@ -297,6 +297,7 @@ function renderOutput(): void {
   if (reply.timedOut) {
     add("out-error", `✕ Execution exceeded ${RUN_TIMEOUT_MS} ms and was terminated.`);
     add("out-note", "Check for a loop that never returns.");
+    if (logs.length > 0) add("out-note", `It logged ${logs.length} line${logs.length === 1 ? "" : "s"} first: see the Logs tab.`);
     return;
   }
   if (reply.noEntry) {
