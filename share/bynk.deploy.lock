@@ -1,0 +1,11 @@
+version = 1
+
+[environments.default.kv.snippets]
+id = "9ea8cfd0c7cf418f8e68beadd9961289"
+
+[environments.default.workers.snippets]
+deployed = true
+
+[environments.default.workers.snippets.contracts]
+
+[environments.default.workers.snippets.expects]
