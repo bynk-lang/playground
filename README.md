@@ -151,13 +151,20 @@ curl -X POST :8080/api/snippets -d '{"source":"context x.y\n"}'   # → {"id":"�
 
 CI deploys the service with [`bynk-deploy`](https://github.com/bynk-lang/bynk-deploy) (the `deploy-share` job in `ci.yml`): `bynk deploy` compiles `share/`, creates its KV namespace (`snippets`) and uploads the Worker `snippets`. The app Worker then reaches it over a **service binding** (`SHARE`): `worker/app.mjs` runs first only for `/api/*` and forwards those calls, so the browser still talks to the app origin and CORS never comes into it. The binding is added (`scripts/with-share-binding.mjs`) only in a run that has just deployed the share service, because Cloudflare rejects a binding to a Worker that does not exist. Without it `/api/*` answers `503` and Share falls back to the self-contained `#…` link, so the app never depends on the service being up.
 
-**First deploy (once):**
+**First deploy (once), done locally.** `bynk deploy` refuses, in CI, to create a KV namespace, because Cloudflare mints the id and a CI job that cannot commit it would leave an orphan nobody could find again. So the first deploy is yours:
 
-1. Give the existing `CLOUDFLARE_API_TOKEN` **Account → Workers KV Storage → Edit** as well as Workers Scripts → Edit.
-2. Run **Actions → CI → Run workflow** on `main` with `bootstrap_share` ticked. It creates the namespace and deploys the Worker, the app deploys with the binding, and the run uploads a `share-bynk-deploy-lock` artifact.
-3. Commit that file as `share/bynk.deploy.lock`. It holds the namespace id; without it every run would create a fresh, empty namespace and the stored snippets would be lost.
+1. Give your Cloudflare API token **Account → Workers Scripts → Edit** and **Workers KV Storage → Edit**.
+2. From the repo root, with that token in the environment (Bynk at the version in `BYNK_VERSION`):
 
-From then on every push to `main` redeploys the service. Until the lock is committed the job only prints the plan (`bynk deploy --dry-run`), on pull requests too.
+   ```sh
+   cd share
+   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… bynk deploy
+   ```
+
+   It creates the `snippets` namespace and Worker and writes `share/bynk.deploy.lock`.
+3. Commit `share/bynk.deploy.lock` (it holds the namespace id and no secrets) and merge.
+
+From then on every push to `main` redeploys the service, and the app deploys with the `SHARE` binding. Until the lock is committed the job only prints the plan (`bynk deploy --dry-run`), on pull requests too.
 
 Things to know: the Worker is named `snippets` (the Bynk context's name) in your account; `POST /api/snippets` is open to anyone who can reach it and writes to KV, bounded by the 64 KiB `Source` refinement and the 30-day expiry but not rate limited; and the service's own `workers.dev` address, if `bynk deploy` enables one, is reachable directly.
 
