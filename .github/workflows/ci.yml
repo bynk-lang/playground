@@ -182,6 +182,15 @@ jobs:
           fi
       # Two Workers, two origins. That separation is the safety boundary
       # (ADR 0140): untrusted snippet code runs only on the sandbox origin.
+      # The sandbox first (#33): the app is what visitors load, and it picks its sandbox up
+      # from the sandbox origin, so a new app should never meet an old sandbox. Keep
+      # changes to the app↔sandbox protocol readable by the previous version of the app.
+      - name: Deploy the sandbox (sandbox.bynk-lang.dev)
+        if: steps.mode.outputs.live == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.152.0 deploy --config wrangler.sandbox.jsonc
       - name: Deploy the app (playground.bynk-lang.dev)
         if: steps.mode.outputs.live == 'true'
         env:
@@ -189,12 +198,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CONFIG: ${{ steps.appconfig.outputs.config }}
         run: npx --yes wrangler@4.152.0 deploy --config "$CONFIG"
-      - name: Deploy the sandbox (sandbox.bynk-lang.dev)
-        if: steps.mode.outputs.live == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4.152.0 deploy --config wrangler.sandbox.jsonc
       - name: Dry run both Workers
         if: steps.mode.outputs.live != 'true'
         env:

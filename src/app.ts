@@ -19,7 +19,7 @@ import type { CompletionContext, CompletionResult } from "@codemirror/autocomple
 import { bynkHighlighting } from "./highlight";
 import { bynkTreeSitterHighlighting } from "./tshighlight";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
-import { SANDBOX_ORIGIN } from "./shared";
+import { BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
 import type { CompileResult, Diagnostic, EmittedFile, RunReply } from "./shared";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
@@ -962,7 +962,7 @@ async function main(): Promise<void> {
   // Load the wasm compiler. Resolve the module against the page URL (not
   // `import.meta.url`) so esbuild leaves the path alone and the `.wasm` is fetched
   // from the deploy root.
-  await init(new URL("bynk_wasm_bg.wasm", location.href));
+  await init(new URL(BYNK_WASM, location.href));
   wasmReady = true;
   if (!sandboxReady) setStatus("compiler ready", "ok");
   // Lint the initial program now that the analyser is loaded.
