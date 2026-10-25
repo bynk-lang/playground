@@ -39,7 +39,7 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 | `src/shared.ts` | Origin config + the postMessage protocol. |
 | `BYNK_VERSION` | The Bynk release the app is built from. |
 | `scripts/fetch-assets.sh` | Download a release's `bynk-web-<tag>.tar.gz`, verify it against the release's `SHA256SUMS`, and unpack it into `src/vendor/`. |
-| `build.mjs` / `serve.mjs` | esbuild build into `dist/` / a two-port local static server. |
+| `build.mjs` / `serve.mjs` | esbuild build into `dist/`, minified (`BYNK_MINIFY=0` to skip), with the app bundle, wasm and fonts content-hashed under `static/` and cached for a year by `_headers` / a two-port local static server. |
 | `wrangler.app.jsonc` / `wrangler.sandbox.jsonc` | The two Workers that serve `dist/`, one per origin. |
 | `share/` | The short-link share service, written in Bynk (below). |
 
