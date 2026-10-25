@@ -116,7 +116,42 @@ await cp("fonts", `${OUT}/fonts`, { recursive: true, filter: (src) => !src.endsW
 // Icons and the link-preview image (assets/README.md). Unhashed: their URLs are published
 // (favicons, the og:image in shared links).
 await cp("assets", OUT, { recursive: true, filter: (src) => !src.endsWith("README.md") });
+// The page's policy (#34). Everything it loads is its own (the fonts are self-hosted, and
+// there is no analytics), so it allows its own origin, the sandbox origin as a frame, and:
+// - the inline theme script, by its hash, so an edit to it cannot slip through unnoticed;
+// - 'wasm-unsafe-eval', which the compiler and highlighter wasm need to run;
+// - inline styles, which CodeMirror injects at runtime (a nonce would need the page to
+//   pass through a Worker; the static assets do not).
+// No frame-ancestors: the embed (?embed=1) is this same page inside other sites.
+const inlineScripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+const scriptHashes = inlineScripts.map((s) => `'sha256-${createHash("sha256").update(s).digest("base64")}'`);
+const csp = [
+  "default-src 'self'",
+  `script-src 'self' ${scriptHashes.join(" ")} 'wasm-unsafe-eval'`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  `frame-src ${sandboxOrigin}`,
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+].join("; ");
+
 // Workers static assets read this file for response headers; it is not served itself.
-await writeFile(`${OUT}/_headers`, `/${STATIC}/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
+// The policy is set on the page path alone: the sandbox Worker serves this same dist/, and
+// its execution document has a policy of its own (worker/sandbox.mjs) that a second one
+// would only narrow. The sandbox Worker redirects "/", so this rule never reaches it.
+await writeFile(
+  `${OUT}/_headers`,
+  [
+    `/${STATIC}/*`,
+    "  Cache-Control: public, max-age=31536000, immutable",
+    "/",
+    `  Content-Security-Policy: ${csp}`,
+    "/*",
+    "  X-Content-Type-Options: nosniff",
+    "  Referrer-Policy: strict-origin-when-cross-origin",
+    "",
+  ].join("\n"),
+);
 
 console.log(`built ${OUT}/  (app=${appOrigin}  sandbox=${sandboxOrigin})`);

@@ -7,6 +7,7 @@
 //   BYNK_APP_ORIGIN=http://localhost:8080 BYNK_SANDBOX_ORIGIN=http://localhost:8081 node build.mjs
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 // BYNK_OUT_DIR / BYNK_APP_PORT / BYNK_SANDBOX_PORT let the browser tests run their own
@@ -54,6 +55,34 @@ async function proxyToWorker(req, res, url) {
   }
 }
 
+// The response headers build.mjs writes to dist/_headers for Workers static assets (the
+// page's Content-Security-Policy among them), applied the same way here, so the browser
+// tests run under the policy that ships: a path line, then indented "Name: value" lines;
+// a path ending in * matches by prefix.
+const HEADER_RULES = (() => {
+  let text = "";
+  try {
+    text = readFileSync(`${ROOT}_headers`, "utf8");
+  } catch {
+    return [];
+  }
+  const rules = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    if (!/^\s/.test(line)) rules.push({ path: line.trim(), headers: {} });
+    else {
+      const i = line.indexOf(":");
+      rules.at(-1).headers[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    }
+  }
+  return rules;
+})();
+const headersFor = (pathname) =>
+  Object.assign(
+    {},
+    ...HEADER_RULES.filter(({ path }) => (path.endsWith("*") ? pathname.startsWith(path.slice(0, -1)) : pathname === path)).map((r) => r.headers),
+  );
+
 // Like the Workers: the app origin never serves the sandbox's files (worker/app.mjs), and
 // an extensionless path is served from its `.html` file (`/sandbox` → sandbox.html).
 const SANDBOX_ONLY = /^\/sandbox(\.html|\.js|\.js\.map)?$/;
@@ -69,7 +98,7 @@ function serve(port, { app = false } = {}) {
     const file = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ""));
     try {
       const body = await readFile(file);
-      res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
+      res.writeHead(200, { ...headersFor(url.pathname), "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
       res.end(body);
     } catch {
       res.writeHead(404, { "content-type": "text/plain" });
