@@ -34,6 +34,12 @@ import init, { bynk_compile, bynk_analyze, bynk_hover, bynk_complete } from "./v
 // example (Hello, world).
 const DEFAULT_SOURCE = EXAMPLES[0].source;
 
+// `?embed=1`: the compact view for an <iframe> in someone else's page (see the share
+// sheet). It runs the snippet but never reads or writes this browser's draft, recents,
+// tour progress or coachmark: a visitor's embed must not disturb their own playground.
+const EMBED = new URLSearchParams(location.search).get("embed") === "1";
+if (EMBED) document.documentElement.dataset.embed = "1";
+
 const RUN_TIMEOUT_MS = 3000;
 const PLATFORM_LOCK = new Set(["bynk.target.vendor_required", "bynk.target.browser_bundle_only"]);
 
@@ -351,7 +357,7 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
     return { compiled: true, error: "sandbox not ready" };
   }
 
-  if (remember) rememberRun(source());
+  if (remember && !EMBED) rememberRun(source());
   setStatus("running…", "busy");
   const id = ++runSeq;
   const reply = await new Promise<RunReply>((resolve) => {
@@ -385,6 +391,7 @@ function dismissCoach(): void {
 }
 
 function showCoach(): void {
+  if (EMBED) return;
   try {
     if (localStorage.getItem("bynk-coach")) return;
   } catch {
@@ -439,6 +446,14 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 // Show `url` in the sheet, put it in the address bar, and copy it.
+// The HTML to paste into a page: the same snippet, in the compact `?embed=1` view.
+function embedCode(shareUrl: string): string {
+  const u = new URL(shareUrl);
+  u.searchParams.set("embed", "1");
+  const src = u.toString().replace(/&/g, "&amp;");
+  return `<iframe src="${src}" title="Bynk playground" width="100%" height="480" loading="lazy" style="border:1px solid #888;border-radius:8px"></iframe>`;
+}
+
 async function presentShareLink(url: string, kind: "short" | "hash"): Promise<void> {
   const input = $("share-url") as HTMLInputElement;
   input.value = url;
@@ -449,6 +464,7 @@ async function presentShareLink(url: string, kind: "short" | "hash"): Promise<vo
       ? "Short links expire after 30 days. The self-contained link never expires."
       : "Self-contained link: the whole program is in the URL, so it needs no server and never expires.";
   $("share-hash").hidden = !(kind === "short" && shareLinks?.hash);
+  ($("embed-code") as HTMLTextAreaElement).value = embedCode(url);
   // Clipboard access can be denied (insecure context, permissions): then leave the
   // link selected in the box so Ctrl/Cmd+C works.
   if (await copyText(url)) {
@@ -499,6 +515,11 @@ function mountShareSheet(): void {
     setShareStatus((await copyText(input.value)) ? "✓ Link copied" : "Copy it from the box.", "ok");
     input.select();
   });
+  $("embed-copy").addEventListener("click", async () => {
+    const box = $("embed-code") as HTMLTextAreaElement;
+    setShareStatus((await copyText(box.value)) ? "✓ Embed code copied" : "Copy the code from the box.", "ok");
+    box.select();
+  });
   $("share-hash").addEventListener("click", () => {
     if (shareLinks) void presentShareLink(shareLinks.hash, "hash");
   });
@@ -522,6 +543,7 @@ function hideSharedNote(): void {
 // Save the editor's contents shortly after the last keystroke. Skipped during the
 // tour (its starters are not the learner's own work).
 function scheduleDraftSave(): void {
+  if (EMBED) return;
   window.clearTimeout(draftTimer);
   draftTimer = window.setTimeout(() => {
     if (tourIndex < 0) saveDraft(source());
@@ -541,7 +563,7 @@ function mountRestoredNote(): void {
 }
 
 function mountSharedNote(): void {
-  if (openedShared) $("shared-note").hidden = false;
+  if (openedShared && !EMBED) $("shared-note").hidden = false;
   $("shared-dismiss").addEventListener("click", hideSharedNote);
   $("fork").addEventListener("click", () => {
     window.history.replaceState(null, "", location.pathname);
@@ -574,7 +596,7 @@ async function loadInitialSource(): Promise<string> {
     return fromHash;
   }
   // No link: pick up where the last visit left off.
-  const draft = loadDraft();
+  const draft = EMBED ? null : loadDraft();
   if (draft && draft.trim() !== "" && draft !== DEFAULT_SOURCE) {
     restoredDraft = true;
     currentExampleId = null;
@@ -731,6 +753,7 @@ function mountTour(): void {
 
 // `?tour=<id>` opens the tour at that step.
 function initialTourIndex(): number {
+  if (EMBED) return -1;
   const id = new URLSearchParams(location.search).get("tour");
   return id ? TOUR.findIndex((s) => s.id === id) : -1;
 }
@@ -802,6 +825,14 @@ async function main(): Promise<void> {
   mountShareSheet();
   mountSharedNote();
   mountRestoredNote();
+  if (EMBED) {
+    // "Open in playground": the same snippet in the full page, in a new tab.
+    const u = new URL(location.href);
+    u.searchParams.delete("embed");
+    const link = $("open-full") as HTMLAnchorElement;
+    link.href = u.toString();
+    link.hidden = false;
+  }
   $("run").addEventListener("click", () => void compileAndRun(true));
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);

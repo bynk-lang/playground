@@ -205,6 +205,23 @@
       #share-status[data-kind="error"] { color: var(--danger); }
       #share-note { margin: 0.25rem 0 0.5rem; color: var(--ink-muted); }
 
+      .embed { margin-top: 0.75rem; }
+      .embed summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 0.25rem 0; }
+      .embed summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      #embed-code { display: block; width: 100%; margin: 0.5rem 0; padding: 0.5rem 0.75rem; resize: vertical;
+        font: 400 0.75rem/1.125rem var(--font-mono); background: var(--surface-panel); color: var(--ink);
+        border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
+      a.btn { font: 600 0.875rem var(--font-sans); border-radius: var(--radius-md); min-height: 2.25rem; padding: 0.375rem 0.875rem;
+        display: inline-flex; align-items: center; text-decoration: none; background: var(--surface-panel); color: var(--ink);
+        border: 1px solid var(--line-strong); }
+      a.btn[hidden] { display: none; }
+      a.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+      /* The compact embed view (?embed=1): run it, or open it in the full playground. */
+      [data-embed] #examples, [data-embed] #tour-btn, [data-embed] #share, [data-embed] #theme,
+      [data-embed] #coach, [data-embed] #shared-note, [data-embed] #restored-note { display: none !important; }
+      [data-embed] #app { padding: 0.5rem; gap: 0.5rem; }
+
       /* Shared-snippet bar */
       #shared-note { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-raised);
         border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
@@ -253,6 +270,7 @@
         <button id="tour-btn" title="A short guided tour of Bynk">Tour</button>
         <button id="run" class="primary" title="Compile &amp; run (⌘/Ctrl+Enter)">▶ Run<kbd>Ctrl+Enter</kbd></button>
         <button id="share" title="Copy a link to this snippet">Share</button>
+        <a id="open-full" class="btn" target="_blank" rel="noopener" hidden>Open in playground ↗</a>
         <span class="spacer"></span>
         <span id="status" role="status" aria-live="polite" data-kind="busy">loading…</span>
         <button id="theme" aria-label="Switch between dark and light theme" title="Switch theme">Theme</button>
@@ -321,6 +339,11 @@
         <p id="share-status" role="status" aria-live="polite"></p>
         <p id="share-note"></p>
         <button id="share-hash" class="link" hidden>Use the self-contained link instead</button>
+        <details class="embed">
+          <summary>Embed in a page</summary>
+          <textarea id="embed-code" readonly rows="4" aria-label="HTML to embed this snippet"></textarea>
+          <button id="embed-copy">Copy embed code</button>
+        </details>
       </dialog>
       <dialog id="gallery" class="sheet" aria-labelledby="gallery-title">
         <form method="dialog" class="gallery-head">
