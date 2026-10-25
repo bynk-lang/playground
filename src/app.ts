@@ -20,7 +20,7 @@ import { bynkHighlighting } from "./highlight";
 import { bynkTreeSitterHighlighting } from "./tshighlight";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
 import { BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
-import type { CompileResult, Diagnostic, EmittedFile, RunReply } from "./shared";
+import type { CompileResult, Diagnostic, EmittedFile, RunReply, SandboxConnect } from "./shared";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
 import { mountGallery } from "./gallery";
@@ -182,6 +182,12 @@ const bynkCompletions = (context: CompletionContext): CompletionResult | null =>
 // slow run that finishes (or times out) after a later one never overwrites it (#22).
 let runSeq = 0;
 const pending = new Map<number, (r: RunReply) => void>();
+// The private channel to the code runner, handed over when it first says it is ready.
+// Runs and results travel only over it, never as window messages (#30).
+let sandboxPort: MessagePort | null = null;
+// Whether the channel has been handed over. Only once: after the runner is lost, a
+// "ready" from whatever now holds the frame must not get a new one.
+let channelOffered = false;
 
 function source(): string {
   return view.state.doc.toString();
@@ -376,10 +382,14 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
     return { compiled: false };
   }
   if (!sandboxReady) {
-    // Compiled, but there is nothing to run it in yet (#31).
-    lastNote = "Compiled. The code runner is still loading: press Run again in a moment.";
+    // Compiled, but there is nothing to run it in: not yet (#31), or no longer, because the
+    // frame was taken over after the channel was handed out (#30) and only a reload helps.
+    const lost = channelOffered;
+    lastNote = lost
+      ? "The code runner was replaced. Reload the page to run again."
+      : "Compiled. The code runner is still loading: press Run again in a moment.";
     renderOutput();
-    setStatus(sandboxFailed ? "code runner not loaded" : "code runner loading…", "error");
+    setStatus(lost ? "code runner lost" : sandboxFailed ? "code runner not loaded" : "code runner loading…", "error");
     return { compiled: true, error: "sandbox not ready" };
   }
 
@@ -387,12 +397,7 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
   setStatus("running…", "busy");
   const reply = await new Promise<RunReply>((resolve) => {
     pending.set(id, resolve);
-    const iframe = $("sandbox") as HTMLIFrameElement;
-    iframe.contentWindow!.postMessage(
-      { kind: "bynk-run", id, files: result.files, timeoutMs: RUN_TIMEOUT_MS },
-      // Opaque sandbox origin can't be named; the sandbox validates by app origin.
-      "*",
-    );
+    sandboxPort!.postMessage({ kind: "bynk-run", id, files: result.files, timeoutMs: RUN_TIMEOUT_MS });
   });
   // A later Run has started since: its outcome is the one to show.
   if (id !== runSeq) return { compiled: true, superseded: true };
@@ -896,6 +901,25 @@ function makeEditor(doc: string): void {
   });
 }
 
+// The frame no longer holds the runner the channel was handed to: stop using the channel,
+// and end any run waiting on it rather than leave it hanging.
+function loseSandbox(): void {
+  sandboxPort?.close();
+  sandboxPort = null;
+  sandboxReady = false;
+  for (const [id, resolve] of pending) {
+    resolve({ kind: "bynk-result", id, logs: [], error: "The code runner was replaced. Reload the page to run again." });
+  }
+  pending.clear();
+  setStatus("code runner lost", "error");
+}
+
+// The frame's load events, and how many there had been when the app last pointed it at
+// the runner. The runner's own load comes after its "ready", so one more load than that is
+// expected; any beyond it means something else navigated the frame (#30).
+let sandboxLoads = 0;
+let loadsBeforeSrc = 0;
+
 // How long the code runner may take to say it is ready before the page says why nothing
 // runs and offers to try again (#31).
 const SANDBOX_LOAD_MS = 8000;
@@ -916,6 +940,7 @@ function retrySandbox(): void {
   sandboxFailed = false;
   setStatus("loading…", "busy");
   const iframe = $("sandbox") as HTMLIFrameElement;
+  loadsBeforeSrc = sandboxLoads;
   iframe.src = iframe.src;
   lastNote = "Loading the code runner…";
   renderOutput();
@@ -933,30 +958,41 @@ function mountSandbox(): void {
   document.body.appendChild(iframe);
   watchSandboxLoad();
 
+  // A load beyond the runner's own, after the handshake, means the frame was navigated:
+  // whatever is there now has no channel, so treat the runner as lost.
+  iframe.addEventListener("load", () => {
+    sandboxLoads++;
+    if (sandboxPort && sandboxLoads > loadsBeforeSrc + 1) loseSandbox();
+  });
+
   window.addEventListener("message", (e: MessageEvent) => {
-    const iframeWin = iframe.contentWindow;
-    // Replies come from the opaque-origin iframe; identify it by window, not origin.
-    if (e.source !== iframeWin) return;
-    const data = e.data as { kind?: string; id?: number };
-    if (data?.kind === "bynk-sandbox-ready") {
-      sandboxReady = true;
-      sandboxFailed = false;
-      window.clearTimeout(sandboxTimer);
-      setStatus("ready", "ok");
-      if (!lastReply) {
-        lastNote = "";
-        renderOutput();
-      }
-      maybeFirstRun();
-      return;
-    }
-    if (data?.kind === "bynk-result" && typeof data.id === "number") {
+    // The ready message comes from the opaque-origin iframe; identify it by window, not
+    // origin. Only the first one is answered: one channel per page.
+    if (e.source !== iframe.contentWindow || channelOffered) return;
+    if ((e.data as { kind?: string })?.kind !== "bynk-sandbox-ready") return;
+    channelOffered = true;
+    const channel = new MessageChannel();
+    sandboxPort = channel.port1;
+    sandboxPort.onmessage = (m: MessageEvent) => {
+      const data = m.data as { kind?: string; id?: number };
+      if (data?.kind !== "bynk-result" || typeof data.id !== "number") return;
       const resolve = pending.get(data.id);
       if (resolve) {
         pending.delete(data.id);
         resolve(data as RunReply);
       }
+    };
+    // The opaque origin can't be named; the sandbox accepts the port only from the app origin.
+    iframe.contentWindow!.postMessage({ kind: "bynk-connect" } satisfies SandboxConnect, "*", [channel.port2]);
+    sandboxReady = true;
+    sandboxFailed = false;
+    window.clearTimeout(sandboxTimer);
+    setStatus("ready", "ok");
+    if (!lastReply) {
+      lastNote = "";
+      renderOutput();
     }
+    maybeFirstRun();
   });
 }
 
