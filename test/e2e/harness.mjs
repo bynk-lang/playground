@@ -24,7 +24,7 @@ export function findChrome() {
   return null;
 }
 
-const freePort = () =>
+export const freePort = () =>
   new Promise((resolve) => {
     const s = createServer().listen(0, () => {
       const { port } = s.address();
@@ -220,4 +220,90 @@ export async function launchBrowser(chrome) {
       await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
     },
   };
+}
+
+/// Run the two real Workers (the app, with the share service bound, and the sandbox)
+/// under `wrangler dev`, built from the repo's own wrangler.*.jsonc, so the Worker
+/// scripts, the SHARE and SHARE_LIMIT bindings, run_worker_first and the sandbox
+/// redirect are all the shipped ones. Only the share service is a stand-in
+/// (test/e2e/fake-share.mjs).
+export async function startWorkers() {
+  const { readFileSync, writeFileSync, openSync } = await import("node:fs");
+  const { withShareBinding } = await import(new URL("../../scripts/with-share-binding.mjs", import.meta.url));
+  const [appPort, sandboxPort] = [await freePort(), await freePort()];
+  const appOrigin = `http://localhost:${appPort}`;
+  const sandboxOrigin = `http://localhost:${sandboxPort}`;
+  const out = ".e2e-workers-dist";
+  execFileSync("node", ["build.mjs"], {
+    cwd: root,
+    env: { ...process.env, BYNK_APP_ORIGIN: appOrigin, BYNK_SANDBOX_ORIGIN: sandboxOrigin, BYNK_OUT_DIR: out },
+    stdio: "ignore",
+  });
+  const dir = await mkdtemp(join(tmpdir(), "bynk-workers-"));
+  const abs = (p) => join(root, p);
+  const read = (f) => readFileSync(abs(f), "utf8");
+  const strip = (s) => JSON.parse(s.replace(/^\s*\/\/.*$/gm, ""));
+  const local = (cfg) => {
+    // Absolute paths (the config now lives in a temp dir), no domains, the test's dist.
+    delete cfg.routes;
+    cfg.main = abs(cfg.main.replace(/^\.\//, ""));
+    cfg.assets.directory = abs(out);
+    return cfg;
+  };
+  const appConfig = local(withShareBinding(read("wrangler.app.jsonc")));
+  const sandboxConfig = local(strip(read("wrangler.sandbox.jsonc")));
+  sandboxConfig.vars = { ...sandboxConfig.vars, APP_ORIGIN: appOrigin };
+  const fakeConfig = { name: "snippets", main: abs("test/e2e/fake-share.mjs"), compatibility_date: appConfig.compatibility_date };
+  const write = (name, cfg) => (writeFileSync(join(dir, name), JSON.stringify(cfg)), join(dir, name));
+  const files = { app: write("app.json", appConfig), sandbox: write("sandbox.json", sandboxConfig), fake: write("fake.json", fakeConfig) };
+
+  const env = { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false", NO_COLOR: "1" };
+  const procs = [];
+  const start = (args, port, label) => {
+    const p = spawn("npx", ["--yes", "wrangler@4.152.0", "dev", "--local", "--port", String(port), "--inspector-port", String(args.inspector),
+      // Each session keeps its own local state: two sharing one lock each other out (SQLITE_BUSY).
+      "--persist-to", join(dir, `state-${label}`), ...args.configs.flatMap((c) => ["-c", c])], {
+      cwd: root,
+      env,
+      stdio: ["ignore", process.env.BYNK_WORKERS_LOG ? openSync(`${process.env.BYNK_WORKERS_LOG}.${label}`, "w") : "ignore", "pipe"],
+      detached: true,
+    });
+    let stderr = "";
+    p.stderr.on("data", (d) => (stderr = (stderr + d).slice(-3000)));
+    procs.push(p);
+    return { p, label, stderr: () => stderr, port };
+  };
+  const stop = () => {
+    for (const p of procs) {
+      try {
+        process.kill(-p.pid);
+      } catch {
+        p.kill();
+      }
+      p.stderr.destroy();
+      p.unref();
+    }
+    return rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
+  };
+  const servers = [
+    start({ configs: [files.app, files.fake], inspector: await freePort() }, appPort, "app"),
+    start({ configs: [files.sandbox], inspector: await freePort() }, sandboxPort, "sandbox"),
+  ];
+  try {
+    for (const s of servers) {
+      let up = false;
+      for (let i = 0; i < 900 && !up; i++) {
+        try {
+          up = (await fetch(`http://127.0.0.1:${s.port}/`, { redirect: "manual" })).status > 0;
+        } catch {
+          await sleep(100);
+        }
+      }
+      if (!up) throw new Error(`wrangler dev (${s.label}) did not answer on ${s.port} within 90s. stderr:\n${s.stderr()}`);
+    }
+  } catch (e) {
+    await stop();
+    throw e;
+  }
+  return { appOrigin, sandboxOrigin, stop };
 }

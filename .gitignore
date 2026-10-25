@@ -7,3 +7,4 @@ src/vendor/
 share/src/out/
 .e2e-dist/
 wrangler.app.share.jsonc
+.e2e-workers-dist/
