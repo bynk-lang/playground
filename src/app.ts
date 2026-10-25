@@ -170,6 +170,8 @@ const bynkCompletions = (context: CompletionContext): CompletionResult | null =>
   };
 };
 
+// Every compile takes the next number; only the newest one may show its outcome, so a
+// slow run that finishes (or times out) after a later one never overwrites it (#22).
 let runSeq = 0;
 const pending = new Map<number, (r: RunReply) => void>();
 
@@ -326,6 +328,7 @@ function showUnsupported(diags: Diagnostic[]): void {
 // `remember`: the user asked for this run, so it is worth listing under Recent (not an
 // automatic first run, an example or a tour starter).
 async function compileAndRun(remember = false): Promise<TourOutcome> {
+  const id = ++runSeq;
   setStatus("compiling…", "busy");
   lastReply = undefined;
   lastNote = "Compiling…";
@@ -360,7 +363,6 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
 
   if (remember && !EMBED) rememberRun(source());
   setStatus("running…", "busy");
-  const id = ++runSeq;
   const reply = await new Promise<RunReply>((resolve) => {
     pending.set(id, resolve);
     const iframe = $("sandbox") as HTMLIFrameElement;
@@ -370,6 +372,8 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
       "*",
     );
   });
+  // A later Run has started since: its outcome is the one to show.
+  if (id !== runSeq) return { compiled: true, superseded: true };
   lastReply = reply;
   renderOutput();
   dismissCoach();
@@ -535,6 +539,10 @@ function mountShareSheet(): void {
 // the share URL so the editor is plainly the reader's own copy.
 let openedShared = false;
 let restoredDraft = false;
+// Why a `?s=` link could not be opened, if it could not (#26): `missing` when the service
+// has no such snippet (expired after 30 days, or never existed), `unreachable` when the
+// service did not answer.
+let linkProblem: "missing" | "unreachable" | null = null;
 let draftTimer: number | undefined;
 
 function hideSharedNote(): void {
@@ -561,6 +569,26 @@ function mountRestoredNote(): void {
     currentExampleId = EXAMPLES[0].id;
     loadSnippet(DEFAULT_SOURCE);
   });
+}
+
+// Say why a share link did not open, and what the editor shows instead. It takes the
+// place of the "restored" bar, which would otherwise read as if the link had worked.
+function mountLinkNote(): void {
+  const note = $("link-note");
+  $("link-dismiss").addEventListener("click", () => (note.hidden = true));
+  if (!linkProblem) return;
+  const text = $("link-note-text");
+  const strong = document.createElement("strong");
+  strong.textContent =
+    linkProblem === "missing" ? "This share link has expired or doesn't exist." : "Couldn't open this share link.";
+  const why =
+    linkProblem === "missing"
+      ? " Short links last 30 days; the self-contained link never expires."
+      : " The share service didn't answer; reload to try again.";
+  const instead = openedShared ? "" : restoredDraft ? " Showing your last snippet." : " Showing the starter program.";
+  text.replaceChildren(strong, why + instead);
+  note.hidden = false;
+  $("restored-note").hidden = true;
 }
 
 function mountSharedNote(): void {
@@ -596,9 +624,14 @@ async function loadInitialSource(): Promise<string> {
         keepStoredDraft();
         return ((await res.json()) as { source: string }).source;
       }
+      // 404: no such snippet. 400: not a valid id, so there never was one.
+      linkProblem = res.status === 404 || res.status === 400 ? "missing" : "unreachable";
     } catch {
-      // fall through to the hash / default
+      linkProblem = "unreachable";
     }
+    // A missing snippet will not come back, so drop the dead link; an unreachable
+    // service may, so keep it for a reload. Either way, fall through to the hash / default.
+    if (linkProblem === "missing") window.history.replaceState(null, "", location.pathname + location.hash);
   }
   const fromHash = await decodeSnippet(location.hash);
   if (fromHash !== null && fromHash !== undefined) {
@@ -752,11 +785,19 @@ function exitTour(run = false): void {
   if (run && back !== null) void compileAndRun();
 }
 
+let checkSeq = 0;
+
 async function checkTour(): Promise<void> {
   const step = tourStep();
   if (!step) return;
+  const check = ++checkSeq;
   setTourFeedback("Checking…");
   const outcome = await compileAndRun();
+  if (outcome.superseded) {
+    // A plain Run replaced this check; a newer Check reports for itself.
+    if (check === checkSeq) setTourFeedback("");
+    return;
+  }
   const miss = step.check(outcome);
   if (miss === null) {
     tourDone = true;
@@ -874,6 +915,7 @@ async function main(): Promise<void> {
   mountShareSheet();
   mountSharedNote();
   mountRestoredNote();
+  mountLinkNote();
   if (EMBED) {
     // "Open in playground": the same snippet in the full page, in a new tab.
     const u = new URL(location.href);

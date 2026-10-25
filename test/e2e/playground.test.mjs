@@ -109,6 +109,21 @@ fn fib(n: Int) -> Int {
 }
 `;
 
+test("a slow run that ends after a later one never replaces the later result", { skip }, async () => {
+  await fresh();
+  // Via about:blank: from the app URL, a `#…` link alone is only a fragment change.
+  await page.goto("about:blank");
+  await page.goto(hashLink(SLOW));
+  await page.waitFor(`document.getElementById("status").textContent === "running…"`, "the slow run to start");
+  await page.click("#examples");
+  await page.click("#gallery-grid .card");
+  await page.waitFor(`document.getElementById("output").textContent.includes("Hello from Bynk!")`, "the later run's result");
+  // Past the slow run's 3 s budget: its timeout must not take over the pane.
+  await new Promise((r) => setTimeout(r, 3500));
+  assert.match(await page.text("#output"), /⇒ Hello from Bynk!/);
+  assert.equal(await status(), "ran");
+});
+
 test("a run that times out still shows what it logged first", { skip }, async () => {
   await fresh();
   await page.goto("about:blank");
@@ -195,6 +210,35 @@ test("share: with the service down, the self-contained link is used", { skip }, 
   await page.goto(link);
   await settled();
   assert.equal(await page.visible("#shared-note"), true);
+});
+
+test("share: a link to a snippet that has expired says so and drops ?s=", { skip }, async () => {
+  await fresh("?s=gone1234");
+  assert.equal(await page.visible("#link-note"), true);
+  assert.match(await page.text("#link-note"), /expired or doesn't exist.*Showing the starter program/);
+  assert.equal(await page.eval(`location.search`), "", "the dead link is dropped");
+  assert.match(await page.text("#output"), /⇒ Hello from Bynk!/);
+});
+
+test("share: an expired link over a saved draft says the draft is shown, not that it was restored", { skip }, async () => {
+  await fresh();
+  await page.eval(`localStorage.setItem("bynk-draft", "context my.draft\\n")`);
+  await page.goto(`${app.url}?s=gone1234`);
+  await settled();
+  assert.match(await page.text("#link-note"), /expired or doesn't exist.*Showing your last snippet/);
+  assert.equal(await page.visible("#restored-note"), false, "one bar, not two");
+  assert.ok((await page.editor()).includes("my.draft"));
+});
+
+test("share: with the service down, a short link says so and keeps ?s= for a reload", { skip }, async () => {
+  await fresh();
+  share.state.down = true;
+  await page.goto(`${app.url}?s=t1`);
+  await settled();
+  assert.match(await page.text("#link-note"), /Couldn't open this share link.*reload/);
+  assert.equal(await page.eval(`location.search`), "?s=t1");
+  await page.click("#link-dismiss");
+  assert.equal(await page.visible("#link-note"), false);
 });
 
 test("embed: the share sheet's code loads the same snippet in the compact view", { skip }, async () => {

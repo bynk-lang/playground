@@ -65,6 +65,8 @@ export interface RunReply {
   timedOut?: boolean;
   /// True when the graph had no zero-argument entry to invoke.
   noEntry?: boolean;
+  /// True when a newer run arrived first and this one's Worker was stopped.
+  superseded?: boolean;
 }
 
 /// sandbox → app, once: the execution document is ready to receive runs.

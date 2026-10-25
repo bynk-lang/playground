@@ -259,6 +259,13 @@
       #restored-note[hidden] { display: none; }
       #restored-note span { flex: 1; }
       #app:has(#restored-note:not([hidden])) { grid-template-rows: auto auto 1fr; }
+      /* A share link that could not be opened (#26). Shown in the embed too: an embedded
+         link that has expired should say so. */
+      #link-note { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-raised);
+        border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
+      #link-note[hidden] { display: none; }
+      #link-note span { flex: 1; }
+      #app:has(#link-note:not([hidden])) { grid-template-rows: auto auto 1fr; }
       .card { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-start; padding: 1rem; background: var(--surface-panel);
         border: 1px solid var(--line); border-radius: var(--radius-md); }
       .card:hover { border-color: var(--ink-muted); }
@@ -301,6 +308,10 @@
         <span><strong>Shared snippet.</strong> Fork it to edit your own copy: the original link never changes.</span>
         <button id="fork">Fork</button>
         <button id="shared-dismiss" class="link">Dismiss</button>
+      </div>
+      <div id="link-note" role="status" hidden>
+        <span id="link-note-text"></span>
+        <button id="link-dismiss" class="link">Dismiss</button>
       </div>
       <div id="restored-note" hidden>
         <span><strong>Restored your last snippet.</strong> It is kept in this browser only.</span>
