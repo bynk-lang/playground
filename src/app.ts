@@ -186,7 +186,8 @@ function renderDiagnostics(diags: Diagnostic[]): void {
   }
   panel.classList.remove("empty");
   for (const d of diags) {
-    const row = document.createElement("div");
+    const row = document.createElement("button");
+    row.type = "button";
     row.className = `diag diag-${d.severity}`;
     const loc = d.line ? `${d.line}:${d.col}` : "—";
     // Click a row to jump the cursor to the offending span.
@@ -236,7 +237,10 @@ function setDiagSummary(diags: Diagnostic[]): void {
 function selectTab(tab: Tab): void {
   activeTab = tab;
   for (const t of document.querySelectorAll<HTMLElement>("[role=tab]")) {
-    t.setAttribute("aria-selected", String(t.dataset.tab === tab));
+    const on = t.dataset.tab === tab;
+    t.setAttribute("aria-selected", String(on));
+    // Roving tabindex: one stop in the tab order, arrow keys move within the list.
+    t.tabIndex = on ? 0 : -1;
   }
   $("output").setAttribute("aria-labelledby", `tab-${tab}`);
   renderOutput();
@@ -275,7 +279,10 @@ function renderOutput(): void {
   }
   if (activeTab === "logs") {
     if (logs.length === 0) add("out-empty", "This run logged nothing.");
-    for (const log of logs) add(log.level === "error" ? "out-error" : "out-log", log.message);
+    for (const log of logs) {
+      if (log.level === "error") add("out-error", `✕ ${log.message}`);
+      else add("out-log", log.message);
+    }
     return;
   }
   // Result tab.
@@ -798,9 +805,31 @@ async function main(): Promise<void> {
   $("run").addEventListener("click", () => void compileAndRun(true));
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
-  for (const t of document.querySelectorAll<HTMLElement>("[role=tab]")) {
+  const tabs = [...document.querySelectorAll<HTMLElement>("[role=tab]")];
+  for (const t of tabs) {
     t.addEventListener("click", () => selectTab(t.dataset.tab as Tab));
+    t.addEventListener("keydown", (e) => {
+      const i = tabs.indexOf(t);
+      const target =
+        e.key === "ArrowRight" ? tabs[(i + 1) % tabs.length]
+        : e.key === "ArrowLeft" ? tabs[(i - 1 + tabs.length) % tabs.length]
+        : e.key === "Home" ? tabs[0]
+        : e.key === "End" ? tabs[tabs.length - 1]
+        : null;
+      if (!target) return;
+      e.preventDefault();
+      selectTab(target.dataset.tab as Tab);
+      target.focus();
+    });
   }
+  selectTab("result");
+  // Run from anywhere, not only inside the editor.
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !(e.target as HTMLElement).closest(".cm-editor")) {
+      e.preventDefault();
+      void compileAndRun(true);
+    }
+  });
   mountTheme();
   showCoach();
   renderOutput();
