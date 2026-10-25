@@ -15,6 +15,7 @@ import type { Extension } from "@codemirror/state";
 import { Parser, Language, Query } from "web-tree-sitter";
 // esbuild loads this as a string (the `.scm: text` loader in build.mjs).
 import highlightsQuery from "./vendor/highlights.scm";
+import { TS_BYNK_WASM, TS_WASM } from "./shared";
 
 // Map a tree-sitter capture name (e.g. `keyword.import`) to a CSS class by its head
 // (`keyword`). Heads not listed are left unhighlighted.
@@ -57,8 +58,8 @@ const tsTheme = EditorView.theme({
 
 async function initParser(): Promise<{ parser: Parser; query: Query } | null> {
   try {
-    await Parser.init({ locateFile: () => new URL("tree-sitter.wasm", location.href).href });
-    const lang = await Language.load(new URL("tree-sitter-bynk.wasm", location.href).href);
+    await Parser.init({ locateFile: () => new URL(TS_WASM, location.href).href });
+    const lang = await Language.load(new URL(TS_BYNK_WASM, location.href).href);
     const parser = new Parser();
     parser.setLanguage(lang);
     return { parser, query: new Query(lang, highlightsQuery) };

@@ -19,7 +19,7 @@ import type { CompletionContext, CompletionResult } from "@codemirror/autocomple
 import { bynkHighlighting } from "./highlight";
 import { bynkTreeSitterHighlighting } from "./tshighlight";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
-import { SANDBOX_ORIGIN } from "./shared";
+import { BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
 import type { CompileResult, Diagnostic, EmittedFile, RunReply, SandboxConnect } from "./shared";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
@@ -50,6 +50,9 @@ let view: EditorView;
 // web-tree-sitter once its wasm has loaded (slice 5b).
 const highlightCompartment = new Compartment();
 let sandboxReady = false;
+// The code runner (the sandbox iframe) never said it was ready: its origin is down,
+// blocked by an extension or a network filter, or very slow (#31).
+let sandboxFailed = false;
 // The linter no-ops until the wasm compiler has loaded (slice 5d).
 let wasmReady = false;
 
@@ -287,6 +290,17 @@ function renderOutput(): void {
   }
 
   const reply = lastReply;
+  if (!reply && sandboxFailed) {
+    add("out-error", "✕ The code runner hasn't loaded, so programs can't run.");
+    add("out-note", `It runs from ${new URL(SANDBOX_ORIGIN).host}: check that an extension, network filter or firewall isn't blocking it.`);
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.id = "sandbox-retry";
+    retry.textContent = "Try again";
+    retry.addEventListener("click", retrySandbox);
+    out.appendChild(retry);
+    return;
+  }
   if (!reply) {
     add("out-empty", lastNote || "Press Run to see the result here.");
     return;
@@ -363,7 +377,14 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
     return { compiled: false };
   }
   if (!sandboxReady) {
-    setStatus("sandbox not ready", "error");
+    // Compiled, but there is nothing to run it in: not yet (#31), or no longer, because the
+    // frame was taken over after the channel was handed out (#30) and only a reload helps.
+    const lost = channelOffered;
+    lastNote = lost
+      ? "The code runner was replaced. Reload the page to run again."
+      : "Compiled. The code runner is still loading: press Run again in a moment.";
+    renderOutput();
+    setStatus(lost ? "code runner lost" : sandboxFailed ? "code runner not loaded" : "code runner loading…", "error");
     return { compiled: true, error: "sandbox not ready" };
   }
 
@@ -888,6 +909,39 @@ function loseSandbox(): void {
   setStatus("code runner lost", "error");
 }
 
+// The frame's load events, and how many there had been when the app last pointed it at
+// the runner. The runner's own load comes after its "ready", so one more load than that is
+// expected; any beyond it means something else navigated the frame (#30).
+let sandboxLoads = 0;
+let loadsBeforeSrc = 0;
+
+// How long the code runner may take to say it is ready before the page says why nothing
+// runs and offers to try again (#31).
+const SANDBOX_LOAD_MS = 8000;
+let sandboxTimer: number | undefined;
+
+function watchSandboxLoad(): void {
+  window.clearTimeout(sandboxTimer);
+  sandboxTimer = window.setTimeout(() => {
+    if (sandboxReady) return;
+    sandboxFailed = true;
+    setStatus("code runner not loaded", "error");
+    renderOutput();
+  }, SANDBOX_LOAD_MS);
+}
+
+// Reload the iframe in place: same element and window, so the message listener stands.
+function retrySandbox(): void {
+  sandboxFailed = false;
+  setStatus("loading…", "busy");
+  const iframe = $("sandbox") as HTMLIFrameElement;
+  loadsBeforeSrc = sandboxLoads;
+  iframe.src = iframe.src;
+  lastNote = "Loading the code runner…";
+  renderOutput();
+  watchSandboxLoad();
+}
+
 function mountSandbox(): void {
   const iframe = document.createElement("iframe");
   iframe.id = "sandbox";
@@ -896,13 +950,13 @@ function mountSandbox(): void {
   iframe.src = `${SANDBOX_ORIGIN}/sandbox.html`;
   iframe.hidden = true;
   document.body.appendChild(iframe);
+  watchSandboxLoad();
 
-  // The first load is the runner itself. A later one means the frame was navigated after
-  // the handshake: whatever is there now has no channel, so treat the runner as lost.
-  let loads = 0;
+  // A load beyond the runner's own, after the handshake, means the frame was navigated:
+  // whatever is there now has no channel, so treat the runner as lost.
   iframe.addEventListener("load", () => {
-    loads++;
-    if (loads > 1 && sandboxPort) loseSandbox();
+    sandboxLoads++;
+    if (sandboxPort && sandboxLoads > loadsBeforeSrc + 1) loseSandbox();
   });
 
   window.addEventListener("message", (e: MessageEvent) => {
@@ -925,7 +979,13 @@ function mountSandbox(): void {
     // The opaque origin can't be named; the sandbox accepts the port only from the app origin.
     iframe.contentWindow!.postMessage({ kind: "bynk-connect" } satisfies SandboxConnect, "*", [channel.port2]);
     sandboxReady = true;
+    sandboxFailed = false;
+    window.clearTimeout(sandboxTimer);
     setStatus("ready", "ok");
+    if (!lastReply) {
+      lastNote = "";
+      renderOutput();
+    }
     maybeFirstRun();
   });
 }
@@ -988,7 +1048,7 @@ async function main(): Promise<void> {
   // Load the wasm compiler. Resolve the module against the page URL (not
   // `import.meta.url`) so esbuild leaves the path alone and the `.wasm` is fetched
   // from the deploy root.
-  await init(new URL("bynk_wasm_bg.wasm", location.href));
+  await init(new URL(BYNK_WASM, location.href));
   wasmReady = true;
   if (!sandboxReady) setStatus("compiler ready", "ok");
   // Lint the initial program now that the analyser is loaded.

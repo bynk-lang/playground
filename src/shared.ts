@@ -15,6 +15,14 @@ export const APP_ORIGIN: string =
 export const SANDBOX_ORIGIN: string =
   typeof __SANDBOX_ORIGIN__ === "string" ? __SANDBOX_ORIGIN__ : "https://sandbox.bynk-lang.dev";
 
+// The wasm files' content-hashed paths from the deploy root (build.mjs, #33).
+declare const __BYNK_WASM__: string;
+declare const __TS_WASM__: string;
+declare const __TS_BYNK_WASM__: string;
+export const BYNK_WASM: string = typeof __BYNK_WASM__ === "string" ? __BYNK_WASM__ : "bynk_wasm_bg.wasm";
+export const TS_WASM: string = typeof __TS_WASM__ === "string" ? __TS_WASM__ : "tree-sitter.wasm";
+export const TS_BYNK_WASM: string = typeof __TS_BYNK_WASM__ === "string" ? __TS_BYNK_WASM__ : "tree-sitter-bynk.wasm";
+
 /// One emitted JavaScript module of a compiled program.
 export interface EmittedFile {
   path: string;
