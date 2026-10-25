@@ -96,19 +96,58 @@ export async function launchBrowser(chrome) {
   const port = await freePort();
   const proc = spawn(
     chrome,
-    ["--headless=new", "--no-sandbox", "--disable-gpu", `--user-data-dir=${profile}`, `--remote-debugging-port=${port}`, "about:blank"],
-    { stdio: "ignore" },
+    [
+      "--headless=new",
+      "--no-sandbox",
+      "--disable-gpu",
+      // CI runners have a small /dev/shm, which crashes Chrome's renderers.
+      "--disable-dev-shm-usage",
+      "--no-first-run",
+      "--disable-extensions",
+      `--user-data-dir=${profile}`,
+      `--remote-debugging-port=${port}`,
+      "about:blank",
+    ],
+    // Its own process group, so every helper process Chrome starts can be killed with it.
+    { stdio: ["ignore", "ignore", "pipe"], detached: true },
   );
-  let targets;
-  for (let i = 0; i < 100 && !targets; i++) {
+  // Kill Chrome and its helpers and let go of its pipes, or an orphan holding them keeps
+  // the test process alive after the tests are done.
+  const stopChrome = () => {
     try {
-      targets = await (await fetch(`http://localhost:${port}/json`)).json();
+      process.kill(-proc.pid);
     } catch {
-      await sleep(100);
+      proc.kill();
     }
+    proc.stderr.destroy();
+    proc.unref();
+  };
+  let stderr = "";
+  proc.stderr.on("data", (d) => (stderr = (stderr + d).slice(-2000)));
+  // If anything below throws, Chrome must still be killed or the test process never exits.
+  let ws;
+  try {
+    // 127.0.0.1, not `localhost`, which may resolve to ::1 where Chrome is not listening.
+    let targets;
+    for (let i = 0; i < 300 && !targets; i++) {
+      try {
+        targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+      } catch {
+        await sleep(100);
+      }
+    }
+    const pageTarget = targets?.find((t) => t.type === "page");
+    if (!pageTarget) throw new Error(`Chrome did not expose DevTools on port ${port} within 30s. stderr:\n${stderr}`);
+    ws = new WebSocket(pageTarget.webSocketDebuggerUrl);
+    await new Promise((resolve, reject) => {
+      ws.onopen = resolve;
+      ws.onerror = () => reject(new Error("DevTools WebSocket failed to open"));
+    });
+  } catch (e) {
+    stopChrome();
+    await rm(profile, { recursive: true, force: true }).catch(() => {});
+    throw e;
   }
-  const ws = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
-  await new Promise((r) => (ws.onopen = r));
   let id = 0;
   const pending = new Map();
   ws.onmessage = (e) => {
@@ -118,10 +157,15 @@ export async function launchBrowser(chrome) {
       pending.delete(m.id);
     }
   };
+  // A command that never answers (a crashed page) must fail the test, not hang the run.
   const send = (method, params = {}) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
       const i = ++id;
-      pending.set(i, resolve);
+      const timer = setTimeout(() => {
+        pending.delete(i);
+        reject(new Error(`DevTools command ${method} timed out after 30s`));
+      }, 30000);
+      pending.set(i, (m) => (clearTimeout(timer), resolve(m)));
       ws.send(JSON.stringify({ id: i, method, params }));
     }).then((m) => m.result);
   await send("Page.enable");
@@ -171,7 +215,7 @@ export async function launchBrowser(chrome) {
     page,
     async close() {
       ws.close();
-      proc.kill();
+      stopChrome();
       // Chrome may still be flushing its profile for a moment after it is killed.
       await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
     },
