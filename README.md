@@ -154,15 +154,20 @@ CI deploys the service with [`bynk-deploy`](https://github.com/bynk-lang/bynk-de
 **First deploy (once), done locally.** `bynk deploy` refuses, in CI, to create a KV namespace, because Cloudflare mints the id and a CI job that cannot commit it would leave an orphan nobody could find again. So the first deploy is yours:
 
 1. Give your Cloudflare API token **Account → Workers Scripts → Edit** and **Workers KV Storage → Edit**.
-2. From the repo root, with that token in the environment (Bynk at the version in `BYNK_VERSION`):
+2. Create the namespace and record it. `bynk deploy` cannot do this step itself yet: it runs `wrangler kv namespace create --json`, a flag wrangler does not have ([bynk-lang/bynk#2428](https://github.com/bynk-lang/bynk/issues/2428)). Until that is fixed, from `share/`:
 
    ```sh
-   cd share
+   wrangler kv namespace create snippets      # note the id it prints
+   printf 'version = 1\n\n[environments.default.kv.snippets]\nid = "<id>"\n' > bynk.deploy.lock
+   ```
+
+3. Deploy the Worker; with the namespace recorded the driver only uploads it, and adds the Worker to the lock:
+
+   ```sh
    CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… bynk deploy
    ```
 
-   It creates the `snippets` namespace and Worker and writes `share/bynk.deploy.lock`.
-3. Commit `share/bynk.deploy.lock` (it holds the namespace id and no secrets) and merge.
+4. Commit `share/bynk.deploy.lock` (it holds the namespace id and no secrets) and merge.
 
 From then on every push to `main` redeploys the service, and the app deploys with the `SHARE` binding. Until the lock is committed the job only prints the plan (`bynk deploy --dry-run`), on pull requests too.
 
