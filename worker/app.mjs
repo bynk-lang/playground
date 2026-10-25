@@ -1,15 +1,21 @@
 // The app origin's Worker. The static app is served by the assets binding; this script
-// runs first only for `/api/*` (wrangler.app.jsonc `run_worker_first`) and hands those
-// calls to the share service through the `SHARE` service binding, so the browser keeps
+// runs first only for `/api/*` and the sandbox's files (wrangler.app.jsonc
+// `run_worker_first`). It refuses the sandbox's files and hands `/api/*` calls to the share service through the `SHARE` service binding, so the browser keeps
 // calling the app origin same-origin: Bynk's `from http` emits no CORS headers.
 //
 // `SHARE` is bound only when the share service was deployed in the same run (see
 // scripts/with-share-binding.mjs and ci.yml). Without it every `/api/*` call answers
 // 503, which the app already treats as "no share service": it falls back to the
 // self-contained `#…` link. A rate-limited POST answers 429 and falls back the same way.
+// The execution document that runs untrusted snippet code. dist/ is shared with the
+// sandbox Worker, but these files must never be served from the app origin: untrusted
+// code runs only on the sandbox origin (ADR 0140, #29).
+export const SANDBOX_ONLY = /^\/sandbox(\.html|\.js|\.js\.map)?$/;
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+    if (SANDBOX_ONLY.test(pathname)) return new Response("not found", { status: 404 });
     if (pathname.startsWith("/api/")) {
       if (!env.SHARE) {
         return Response.json({ error: "share service not available" }, { status: 503 });

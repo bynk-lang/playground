@@ -54,12 +54,18 @@ async function proxyToWorker(req, res, url) {
   }
 }
 
-function serve(port) {
+// Like the Workers: the app origin never serves the sandbox's files (worker/app.mjs), and
+// an extensionless path is served from its `.html` file (`/sandbox` → sandbox.html).
+const SANDBOX_ONLY = /^\/sandbox(\.html|\.js|\.js\.map)?$/;
+
+function serve(port, { app = false } = {}) {
   createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (url.pathname.startsWith("/api/")) return proxyToWorker(req, res, url);
     let path = decodeURIComponent(url.pathname);
+    if (app && SANDBOX_ONLY.test(path)) path = "/missing";
     if (path === "/" || path.endsWith("/")) path += "index.html";
+    else if (!extname(path)) path += ".html";
     const file = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ""));
     try {
       const body = await readFile(file);
@@ -72,5 +78,5 @@ function serve(port) {
   }).listen(port, () => console.log(`serving ${ROOT} on http://localhost:${port}`));
 }
 
-serve(Number(process.env.BYNK_APP_PORT ?? 8080)); // app origin
+serve(Number(process.env.BYNK_APP_PORT ?? 8080), { app: true }); // app origin
 serve(Number(process.env.BYNK_SANDBOX_PORT ?? 8081)); // sandbox origin
