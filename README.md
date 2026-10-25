@@ -188,6 +188,30 @@ The editor starts on the lightweight CodeMirror **stream highlighter**
 Compartment). If the grammar wasm is absent or fails to load, the stream highlighter
 stays.
 
+## Privacy
+
+The playground is built to need as little as possible from the people who use it.
+
+- **Your programs stay in your browser.** The compiler and your programs run on your own
+  device. Nothing you type is sent anywhere unless you press **Share**.
+- **Sharing.** A short `?s=` link stores the program with the share service, hosted on
+  Cloudflare, for 30 days, after which it is deleted. Anyone with the link can read it
+  in that time. It is stored under a random id and nothing else: no account, name or
+  address goes with it. The self-contained `#…` link stores nothing at all: the program
+  travels in the link itself, and browsers do not send that part of a link to the server.
+- **What your browser keeps.** The playground keeps your current draft, your last 10
+  programs (**Recent**), your tour progress, your theme and whether you have dismissed
+  the first-run hint in your browser's local storage. It never leaves your device;
+  clearing your site data removes it. An embedded playground never reads or saves your
+  draft, Recent or tour progress.
+- **No cookies, analytics or tracking.** The playground sets no cookies, runs no analytics,
+  and loads nothing from other sites: its fonts are served from its own domain.
+- **Hosting.** The playground runs on Cloudflare, which handles each request (including
+  your IP address) to serve it, under [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/).
+  The playground's own code records nothing about requests. Creating a short link is
+  rate limited by the address the request comes from, using a count Cloudflare keeps for
+  the one-minute window the limit covers.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
