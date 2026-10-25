@@ -1,0 +1,32 @@
+suite snippets {
+	case "a shared snippet gets a twelve-character id and reads back" {
+		let created <- api.POST(
+			"/api/snippets",
+			CreateRequest { source: "context x.y\n" }
+		) by Visitor
+		match created {
+			Created(view) => {
+				expect view.id.length() == 12
+				let read <- api.GET("/api/snippets/:id", view.id) by Visitor
+				match read {
+					Ok(snippet) => expect snippet.source == "context x.y\n",
+					_ => expect false,
+				}
+			},
+			_ => expect false,
+		}
+	}
+
+	case "an id already in use is never written over" {
+		stub Random.uuid() returns "0123abcd-4567-4890-abcd-0123456789ab"
+		let first <- api.POST("/api/snippets", CreateRequest { source: "first" }) by Visitor
+		let second <- api.POST("/api/snippets", CreateRequest { source: "second" }) by Visitor
+		expect first is Created(_)
+		expect second is ServerError(_)
+		let read <- api.GET("/api/snippets/:id", Val[SnippetId]("0123abcd4567")) by Visitor
+		match read {
+			Ok(snippet) => expect snippet.source == "first",
+			_ => expect false,
+		}
+	}
+}
