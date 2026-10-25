@@ -23,6 +23,7 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 | `src/app.ts` | The app: editor (CodeMirror 6), compile, diagnostics, run, deep-link, Share, examples picker. |
 | `src/examples.ts` | The examples gallery — curated, **runnable** in-process snippets; the header picker loads them. `test/examples.test.mjs` compiles and runs every one. |
 | `src/gallery.ts` | The searchable examples dialog (cards with a blurb and code peek). |
+| `fonts/` | The editor's code font: JetBrainsMono Nerd Font, trimmed woff2 with its ligatures (`calt`) kept, under the SIL OFL. See `fonts/README.md`. |
 | `src/store.ts` | Per-browser memory: the autosaved draft, the last 10 snippets you ran and the tour steps you have passed (localStorage, every access guarded). `test/store.test.mjs` covers the recent-list logic. |
 | `src/tour.ts` | The guided tour: five small programs to fix, each with a `check`. `test/tour.test.mjs` proves every starter fails its check and every solution passes. |
 | `src/sandbox.ts` | The execution document: links the JS graph to blob-URL modules, runs it in a Worker under a wall-clock timeout, posts results back. |
