@@ -441,6 +441,38 @@ function maybeFirstRun(): void {
   void compileAndRun();
 }
 
+// The menu button (narrow screens): Examples, Tour and Theme live in its dropdown. On a
+// wide screen the CSS shows them inline and hides the button, so this only toggles state.
+function mountMenu(): void {
+  const header = document.querySelector("header")!;
+  const button = $("menu-btn");
+  const menu = $("menu");
+  const setOpen = (open: boolean): void => {
+    header.toggleAttribute("data-menu-open", open);
+    button.setAttribute("aria-expanded", String(open));
+  };
+  const isOpen = () => header.hasAttribute("data-menu-open");
+  button.addEventListener("click", () => {
+    setOpen(!isOpen());
+    if (isOpen()) menu.querySelector<HTMLElement>("button")?.focus();
+  });
+  // Choosing an item closes the menu (the item's own handler has already run).
+  menu.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("button")) setOpen(false);
+  });
+  document.addEventListener("click", (e) => {
+    if (isOpen() && !(e.target as HTMLElement).closest("#menu, #menu-btn")) setOpen(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isOpen()) {
+      setOpen(false);
+      button.focus();
+    }
+  });
+  // Growing past the breakpoint turns the dropdown back into the toolbar: leave no stale state.
+  matchMedia("(max-width: 800px)").addEventListener("change", () => setOpen(false));
+}
+
 function mountTheme(): void {
   $("theme").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
@@ -1049,6 +1081,7 @@ async function main(): Promise<void> {
     }
   });
   mountTheme();
+  mountMenu();
   showCoach();
   renderOutput();
   const t0 = initialTourIndex();
