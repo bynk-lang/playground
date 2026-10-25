@@ -55,6 +55,16 @@ test("the opening program runs by itself across the sandbox origin", { skip }, a
   assert.equal(await page.eval(`document.getElementById("sandbox").src.startsWith(location.origin)`), false, "sandbox is on its own origin");
 });
 
+test("a program with no capabilities runs: it has no compose.js, and the sandbox must still find its handler", { skip }, async () => {
+  // The reported snippet: no `consumes`, no `given`, so the compiler emits no composition root.
+  share.store.set("nocap", "context demo.records\n\ntype Point = { x: Int, y: Int }\n\nservice make {\n  on call() -> Effect[Point] {\n    Point { x: 3, y: 4 }\n  }\n}\n");
+  await fresh("?s=nocap");
+  assert.equal(await status(), "ran");
+  const out = await page.text("#output");
+  assert.match(out, /⇒ \{"x":3,"y":4\}/);
+  assert.doesNotMatch(out, /No zero-argument/);
+});
+
 test("a broken program shows the error and does not run", { skip }, async () => {
   await fresh();
   await page.type("zzz ");
