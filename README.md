@@ -40,6 +40,10 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 | `wrangler.app.jsonc` / `wrangler.sandbox.jsonc` | The two Workers that serve `dist/`, one per origin. |
 | `share/` | The short-link share service, written in Bynk (below). |
 
+## Embedding
+
+The share sheet offers an `<iframe>` for the snippet. It points at the same link with `?embed=1`, a compact view that runs the snippet and offers **Open in playground**. An embed never reads or writes the visitor's own draft, recents, tour progress or hints.
+
 ## Build
 
 ```sh

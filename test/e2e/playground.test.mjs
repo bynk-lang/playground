@@ -155,6 +155,40 @@ test("share: with the service down, the self-contained link is used", { skip }, 
   assert.equal(await page.visible("#shared-note"), true);
 });
 
+test("embed: the share sheet's code loads the same snippet in the compact view", { skip }, async () => {
+  await fresh();
+  await page.type(SCRATCH);
+  await page.click("#share");
+  await page.waitFor(`document.getElementById("share-url").value.includes("?s=")`, "a short link");
+  const code = await page.eval(`document.getElementById("embed-code").value`);
+  assert.match(code, /^<iframe src="http:\/\/localhost:\d+\/\?s=t\d+&amp;embed=1"/);
+  assert.match(code, /title="Bynk playground"/);
+  const src = code.match(/src="([^"]+)"/)[1].replace(/&amp;/g, "&");
+  await page.eval(`document.getElementById("share-sheet").close()`);
+
+  await page.goto(src);
+  await settled();
+  assert.equal(await page.eval(`document.documentElement.dataset.embed`), "1");
+  assert.ok((await page.editor()).includes("// scratch"));
+  for (const hidden of ["#share", "#examples", "#tour-btn", "#theme", "#shared-note"]) {
+    assert.equal(await page.visible(hidden), false, `${hidden} is hidden in the embed`);
+  }
+  assert.equal(await page.visible("#run"), true);
+  assert.equal(await page.visible("#open-full"), true);
+  const full = await page.eval(`document.getElementById("open-full").href`);
+  assert.ok(full.includes("?s=t") && !full.includes("embed"), "Open in playground drops embed");
+});
+
+test("embed: never touches the visitor's own draft or recents", { skip }, async () => {
+  await fresh("?embed=1");
+  await page.type(SCRATCH);
+  await page.click("#run");
+  await settled();
+  await new Promise((r) => setTimeout(r, 800));
+  assert.equal(await page.eval(`localStorage.getItem("bynk-draft")`), null);
+  assert.equal(await page.eval(`localStorage.getItem("bynk-recent")`), null);
+});
+
 test("the last snippet is restored, Recent lists runs, Start fresh resets", { skip }, async () => {
   await fresh();
   await page.type(SCRATCH);
