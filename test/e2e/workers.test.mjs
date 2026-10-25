@@ -40,7 +40,7 @@ test("the page runs a snippet through the sandbox Worker", { skip, timeout: 1200
   await settled();
   assert.equal(await page.text("#status"), "ran");
   assert.match(await page.text("#output"), /⇒ Hello from Bynk!/);
-  assert.equal(await page.eval(`document.getElementById("sandbox").src`), `${workers.sandboxOrigin}/sandbox.html`);
+  assert.equal(await page.eval(`document.getElementById("sandbox").src`), `${workers.sandboxOrigin}/sandbox`);
 });
 
 test("the sandbox origin serves only the execution document and sends the rest to the app", { skip }, async () => {
@@ -74,6 +74,20 @@ test("content-hashed files are cached for a year; the page is always revalidated
   assert.doesNotMatch(page.headers.get("cache-control") ?? "", /immutable/, "the HTML is never cached for good");
   assert.equal((await fetch(workers.appOrigin + "/_headers")).status, 404, "the headers file itself is not served");
 });
+
+test("the app origin refuses the sandbox's files, so untrusted code never runs there", { skip }, async () => {
+  for (const path of ["/sandbox", "/sandbox.html", "/sandbox.js", "/sandbox.js.map"]) {
+    const res = await fetch(workers.appOrigin + path, { redirect: "manual" });
+    assert.equal(res.status, 404, path);
+  }
+});
+
+test("the execution document runs programs under its no-network policy", { skip }, async () => {
+  const res = await fetch(workers.sandboxOrigin + "/sandbox");
+  assert.match(res.headers.get("content-security-policy") ?? "", /connect-src 'none'/);
+  // The first test ran a program through this same document, so the policy lets it run.
+});
+
 
 test("Share makes a short link through the app Worker and the SHARE binding", { skip }, async () => {
   await page.goto(workers.appOrigin);

@@ -180,6 +180,17 @@ test("the Run button shows the shortcut the platform uses", { skip }, async () =
 });
 
 
+test("the UI font is served from the page's own origin", { skip }, async () => {
+  await fresh();
+  const status = await page.eval(`(async () => {
+    await document.fonts.load('600 14px "Instrument Sans"');
+    return [...document.fonts].filter((f) => f.family.includes("Instrument Sans")).map((f) => f.status);
+  })()`);
+  assert.ok(status.includes("loaded"), `Instrument Sans faces: ${status}`);
+  assert.equal(await page.eval(`document.querySelector('link[href*="googleapis"]')`), null);
+});
+
+
 test("a document that takes over the code runner's frame gets no runs and can't answer for them", { skip }, async () => {
   await fresh();
   // What a page framing the playground could do: navigate the inner sandbox frame to a

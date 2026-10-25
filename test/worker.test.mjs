@@ -22,6 +22,22 @@ test("API calls answer 503 without the binding, so the app falls back to the has
   assert.deepEqual(await res.json(), { error: "share service not available" });
 });
 
+test("the app origin never serves the sandbox's execution document", async () => {
+  for (const path of ["/sandbox", "/sandbox.html", "/sandbox.js", "/sandbox.js.map"]) {
+    const res = await worker.fetch(req(path), { SHARE: tag("share"), ASSETS: tag("assets") });
+    assert.equal(res.status, 404, path);
+  }
+  // Only those files: a path that merely starts with "sandbox" is an ordinary asset.
+  const other = await worker.fetch(req("/sandboxes.png"), { ASSETS: tag("assets") });
+  assert.equal(await other.text(), "assets:/sandboxes.png");
+});
+
+test("the wrangler config runs the Worker first for the sandbox's files", async () => {
+  const jsonc = await readFile(new URL("../wrangler.app.jsonc", import.meta.url), "utf8");
+  const { assets } = JSON.parse(jsonc.replace(/^\s*\/\/.*$/gm, ""));
+  assert.ok(assets.run_worker_first.includes("/sandbox*"));
+});
+
 test("everything else is served from the assets", async () => {
   const res = await worker.fetch(req("/app.js"), { SHARE: tag("share"), ASSETS: tag("assets") });
   assert.equal(await res.text(), "assets:/app.js");
@@ -38,6 +54,21 @@ test("the merged wrangler config adds the SHARE binding and keeps the rest", asy
 
 const sandboxEnv = { ASSETS: tag("assets"), APP_ORIGIN: "https://app.example" };
 const sandboxReq = (path) => new Request(`https://sandbox.example${path}`);
+
+test("the execution document is served under a policy that allows no network access", async () => {
+  const html = { fetch: async () => new Response("<!doctype html>", { headers: { "content-type": "text/html" } }) };
+  const res = await sandbox.fetch(sandboxReq("/sandbox"), { ...sandboxEnv, ASSETS: html });
+  const csp = res.headers.get("content-security-policy");
+  assert.match(csp, /default-src 'none'/);
+  assert.match(csp, /script-src https:\/\/sandbox\.example blob:/);
+  assert.match(csp, /connect-src 'none'/);
+  assert.doesNotMatch(csp, /frame-ancestors/, "an embedded playground must still load it");
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+  const js = { fetch: async () => new Response("", { headers: { "content-type": "text/javascript" } }) };
+  const script = await sandbox.fetch(sandboxReq("/sandbox.js"), { ...sandboxEnv, ASSETS: js });
+  assert.equal(script.headers.get("content-security-policy"), null, "the policy belongs to the document");
+  assert.equal(script.headers.get("x-content-type-options"), "nosniff");
+});
 
 test("the sandbox origin serves only the execution document", async () => {
   for (const path of ["/sandbox.html", "/sandbox", "/sandbox.js", "/sandbox.js.map"]) {
