@@ -70,6 +70,9 @@ jobs:
         run: npx tsc --noEmit
       - name: Unit tests + gallery examples
         run: npm test
+      # Fetch wrangler once, here, rather than inside the Workers tests' time budget (#43).
+      - name: Fetch wrangler
+        run: npx --yes wrangler@4.152.0 --version
       - name: Browser tests
         # Includes the Workers tests, which run the real app and sandbox Workers under
         # `npx wrangler@4.152.0 dev` (the version ci.yml deploys with).

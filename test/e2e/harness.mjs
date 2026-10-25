@@ -229,6 +229,9 @@ export async function launchBrowser(chrome) {
 /// scripts, the SHARE and SHARE_LIMIT bindings, run_worker_first and the sandbox
 /// redirect are all the shipped ones. Only the share service is a stand-in
 /// (test/e2e/fake-share.mjs).
+// How long the two `wrangler dev` processes together may take to answer.
+const WRANGLER_START_MS = 120000;
+
 export async function startWorkers() {
   const { readFileSync, writeFileSync, openSync } = await import("node:fs");
   const { withShareBinding } = await import(new URL("../../scripts/with-share-binding.mjs", import.meta.url));
@@ -291,17 +294,22 @@ export async function startWorkers() {
     start({ configs: [files.app, files.fake], inspector: await freePort() }, appPort, "app"),
     start({ configs: [files.sandbox], inspector: await freePort() }, sandboxPort, "sandbox"),
   ];
+  // One deadline for both, well inside the test file's own timeout (package.json), so a
+  // slow start fails here with wrangler's stderr rather than as a bare file timeout (#43).
+  const deadline = Date.now() + WRANGLER_START_MS;
   try {
     for (const s of servers) {
       let up = false;
-      for (let i = 0; i < 900 && !up; i++) {
+      while (!up && Date.now() < deadline) {
         try {
           up = (await fetch(`http://127.0.0.1:${s.port}/`, { redirect: "manual" })).status > 0;
         } catch {
           await sleep(100);
         }
       }
-      if (!up) throw new Error(`wrangler dev (${s.label}) did not answer on ${s.port} within 90s. stderr:\n${s.stderr()}`);
+      if (!up) {
+        throw new Error(`wrangler dev (${s.label}) did not answer on ${s.port} within ${WRANGLER_START_MS / 1000}s. stderr:\n${s.stderr()}`);
+      }
     }
   } catch (e) {
     await stop();

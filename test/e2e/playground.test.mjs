@@ -166,6 +166,20 @@ test("when the code runner can't load, the page says so and can try again", { sk
   }
 });
 
+test("the Run button shows the shortcut the platform uses", { skip }, async () => {
+  await fresh();
+  assert.equal(await page.text("#run-key"), "Ctrl+Enter");
+  const { userAgent } = await page.send("Browser.getVersion");
+  await page.send("Emulation.setUserAgentOverride", { userAgent, platform: "MacIntel" });
+  try {
+    await page.goto(app.url);
+    assert.equal(await page.text("#run-key"), "⌘↵");
+  } finally {
+    await page.send("Emulation.setUserAgentOverride", { userAgent, platform: "Linux x86_64" });
+  }
+});
+
+
 test("the UI font is served from the page's own origin", { skip }, async () => {
   await fresh();
   const status = await page.eval(`(async () => {
