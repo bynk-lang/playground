@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A placeholder tile (a bold B on the brand amber) until the official Bynk mark is supplied. -->
+  <rect width="64" height="64" rx="14" fill="#f2b134"/>
+  <path fill="#1a1405" d="M19 13H34A9.5 9.5 0 0 1 34 32H36.5A9.5 9.5 0 0 1 36.5 51H19Z"/>
+  <g fill="#f2b134">
+    <path d="M27 20H33A2.5 2.5 0 0 1 33 25H27Z"/>
+    <path d="M27 38H35A3.5 3.5 0 0 1 35 45H27Z"/>
+  </g>
+</svg>

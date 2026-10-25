@@ -60,6 +60,8 @@ await esbuild.build({ ...common, entryPoints: { sandbox: "src/sandbox.ts" }, for
 // Static assets + the wasm module (fetched at runtime from the deploy root).
 await cp("index.html", `${OUT}/index.html`);
 await cp("sandbox.html", `${OUT}/sandbox.html`);
+// Icons and the link-preview image (assets/README.md).
+await cp("assets", OUT, { recursive: true, filter: (src) => !src.endsWith("README.md") });
 // The self-hosted code font (JetBrainsMono Nerd Font, trimmed; see fonts/README.md).
 await cp("fonts", `${OUT}/fonts`, { recursive: true });
 await cp("src/vendor/bynk_wasm_bg.wasm", `${OUT}/bynk_wasm_bg.wasm`);
