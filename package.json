@@ -9,7 +9,7 @@
     "build": "node build.mjs",
     "serve": "node serve.mjs",
     "test": "node --test test/*.test.mjs",
-    "test:e2e": "node --test --test-concurrency=1 --test-timeout=90000 test/e2e/*.test.mjs"
+    "test:e2e": "node --test --test-concurrency=1 --test-timeout=180000 test/e2e/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

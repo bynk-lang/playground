@@ -19,7 +19,7 @@ import type { CompletionContext, CompletionResult } from "@codemirror/autocomple
 import { bynkHighlighting } from "./highlight";
 import { bynkTreeSitterHighlighting } from "./tshighlight";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
-import { SANDBOX_ORIGIN } from "./shared";
+import { BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
 import type { CompileResult, Diagnostic, EmittedFile, RunReply } from "./shared";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
@@ -50,6 +50,9 @@ let view: EditorView;
 // web-tree-sitter once its wasm has loaded (slice 5b).
 const highlightCompartment = new Compartment();
 let sandboxReady = false;
+// The code runner (the sandbox iframe) never said it was ready: its origin is down,
+// blocked by an extension or a network filter, or very slow (#31).
+let sandboxFailed = false;
 // The linter no-ops until the wasm compiler has loaded (slice 5d).
 let wasmReady = false;
 
@@ -281,6 +284,17 @@ function renderOutput(): void {
   }
 
   const reply = lastReply;
+  if (!reply && sandboxFailed) {
+    add("out-error", "✕ The code runner hasn't loaded, so programs can't run.");
+    add("out-note", `It runs from ${new URL(SANDBOX_ORIGIN).host}: check that an extension, network filter or firewall isn't blocking it.`);
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.id = "sandbox-retry";
+    retry.textContent = "Try again";
+    retry.addEventListener("click", retrySandbox);
+    out.appendChild(retry);
+    return;
+  }
   if (!reply) {
     add("out-empty", lastNote || "Press Run to see the result here.");
     return;
@@ -357,7 +371,10 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
     return { compiled: false };
   }
   if (!sandboxReady) {
-    setStatus("sandbox not ready", "error");
+    // Compiled, but there is nothing to run it in yet (#31).
+    lastNote = "Compiled. The code runner is still loading: press Run again in a moment.";
+    renderOutput();
+    setStatus(sandboxFailed ? "code runner not loaded" : "code runner loading…", "error");
     return { compiled: true, error: "sandbox not ready" };
   }
 
@@ -874,6 +891,32 @@ function makeEditor(doc: string): void {
   });
 }
 
+// How long the code runner may take to say it is ready before the page says why nothing
+// runs and offers to try again (#31).
+const SANDBOX_LOAD_MS = 8000;
+let sandboxTimer: number | undefined;
+
+function watchSandboxLoad(): void {
+  window.clearTimeout(sandboxTimer);
+  sandboxTimer = window.setTimeout(() => {
+    if (sandboxReady) return;
+    sandboxFailed = true;
+    setStatus("code runner not loaded", "error");
+    renderOutput();
+  }, SANDBOX_LOAD_MS);
+}
+
+// Reload the iframe in place: same element and window, so the message listener stands.
+function retrySandbox(): void {
+  sandboxFailed = false;
+  setStatus("loading…", "busy");
+  const iframe = $("sandbox") as HTMLIFrameElement;
+  iframe.src = iframe.src;
+  lastNote = "Loading the code runner…";
+  renderOutput();
+  watchSandboxLoad();
+}
+
 function mountSandbox(): void {
   const iframe = document.createElement("iframe");
   iframe.id = "sandbox";
@@ -883,6 +926,7 @@ function mountSandbox(): void {
   iframe.src = `${SANDBOX_ORIGIN}/sandbox`;
   iframe.hidden = true;
   document.body.appendChild(iframe);
+  watchSandboxLoad();
 
   window.addEventListener("message", (e: MessageEvent) => {
     const iframeWin = iframe.contentWindow;
@@ -891,7 +935,13 @@ function mountSandbox(): void {
     const data = e.data as { kind?: string; id?: number };
     if (data?.kind === "bynk-sandbox-ready") {
       sandboxReady = true;
+      sandboxFailed = false;
+      window.clearTimeout(sandboxTimer);
       setStatus("ready", "ok");
+      if (!lastReply) {
+        lastNote = "";
+        renderOutput();
+      }
       maybeFirstRun();
       return;
     }
@@ -963,7 +1013,7 @@ async function main(): Promise<void> {
   // Load the wasm compiler. Resolve the module against the page URL (not
   // `import.meta.url`) so esbuild leaves the path alone and the `.wasm` is fetched
   // from the deploy root.
-  await init(new URL("bynk_wasm_bg.wasm", location.href));
+  await init(new URL(BYNK_WASM, location.href));
   wasmReady = true;
   if (!sandboxReady) setStatus("compiler ready", "ok");
   // Lint the initial program now that the analyser is loaded.
