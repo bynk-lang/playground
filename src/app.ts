@@ -534,6 +534,10 @@ function mountShareSheet(): void {
 // the share URL so the editor is plainly the reader's own copy.
 let openedShared = false;
 let restoredDraft = false;
+// Why a `?s=` link could not be opened, if it could not (#26): `missing` when the service
+// has no such snippet (expired after 30 days, or never existed), `unreachable` when the
+// service did not answer.
+let linkProblem: "missing" | "unreachable" | null = null;
 let draftTimer: number | undefined;
 
 function hideSharedNote(): void {
@@ -562,6 +566,26 @@ function mountRestoredNote(): void {
   });
 }
 
+// Say why a share link did not open, and what the editor shows instead. It takes the
+// place of the "restored" bar, which would otherwise read as if the link had worked.
+function mountLinkNote(): void {
+  const note = $("link-note");
+  $("link-dismiss").addEventListener("click", () => (note.hidden = true));
+  if (!linkProblem) return;
+  const text = $("link-note-text");
+  const strong = document.createElement("strong");
+  strong.textContent =
+    linkProblem === "missing" ? "This share link has expired or doesn't exist." : "Couldn't open this share link.";
+  const why =
+    linkProblem === "missing"
+      ? " Short links last 30 days; the self-contained link never expires."
+      : " The share service didn't answer; reload to try again.";
+  const instead = openedShared ? "" : restoredDraft ? " Showing your last snippet." : " Showing the starter program.";
+  text.replaceChildren(strong, why + instead);
+  note.hidden = false;
+  $("restored-note").hidden = true;
+}
+
 function mountSharedNote(): void {
   if (openedShared && !EMBED) $("shared-note").hidden = false;
   $("shared-dismiss").addEventListener("click", hideSharedNote);
@@ -586,9 +610,14 @@ async function loadInitialSource(): Promise<string> {
         openedShared = true;
         return ((await res.json()) as { source: string }).source;
       }
+      // 404: no such snippet. 400: not a valid id, so there never was one.
+      linkProblem = res.status === 404 || res.status === 400 ? "missing" : "unreachable";
     } catch {
-      // fall through to the hash / default
+      linkProblem = "unreachable";
     }
+    // A missing snippet will not come back, so drop the dead link; an unreachable
+    // service may, so keep it for a reload. Either way, fall through to the hash / default.
+    if (linkProblem === "missing") window.history.replaceState(null, "", location.pathname + location.hash);
   }
   const fromHash = await decodeSnippet(location.hash);
   if (fromHash !== null && fromHash !== undefined) {
@@ -825,6 +854,7 @@ async function main(): Promise<void> {
   mountShareSheet();
   mountSharedNote();
   mountRestoredNote();
+  mountLinkNote();
   if (EMBED) {
     // "Open in playground": the same snippet in the full page, in a new tab.
     const u = new URL(location.href);
