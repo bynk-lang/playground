@@ -59,3 +59,49 @@ test("anything else on the sandbox origin is sent to the app, path and query kep
     assert.equal(res.headers.get("location"), location, path);
   }
 });
+
+// A stand-in for the rate-limiting binding: allows `allowed` calls, then refuses.
+const limiter = (allowed) => {
+  const calls = [];
+  return { calls, limit: async ({ key }) => (calls.push(key), { success: calls.length <= allowed }) };
+};
+const post = (path, ip) =>
+  new Request(`https://playground.example${path}`, { method: "POST", headers: ip ? { "cf-connecting-ip": ip } : {} });
+
+test("creating a snippet is rate limited per client address, then answers 429 with Retry-After", async () => {
+  const SHARE_LIMIT = limiter(2);
+  const env = { SHARE: tag("share"), ASSETS: tag("assets"), SHARE_LIMIT };
+  assert.equal(await (await worker.fetch(post("/api/snippets", "203.0.113.7"), env)).text(), "share:/api/snippets");
+  assert.equal(await (await worker.fetch(post("/api/snippets", "203.0.113.7"), env)).text(), "share:/api/snippets");
+  const blocked = await worker.fetch(post("/api/snippets", "203.0.113.7"), env);
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.headers.get("retry-after"), "60");
+  assert.match((await blocked.json()).error, /too many shares/);
+  assert.deepEqual(SHARE_LIMIT.calls, ["203.0.113.7", "203.0.113.7", "203.0.113.7"], "keyed by cf-connecting-ip");
+});
+
+test("reads and other paths are never rate limited", async () => {
+  const SHARE_LIMIT = limiter(0);
+  const env = { SHARE: tag("share"), ASSETS: tag("assets"), SHARE_LIMIT };
+  assert.equal(await (await worker.fetch(req("/api/snippets/abc123"), env)).text(), "share:/api/snippets/abc123");
+  assert.equal(await (await worker.fetch(post("/api/other", "203.0.113.7"), env)).text(), "share:/api/other");
+  assert.deepEqual(SHARE_LIMIT.calls, []);
+});
+
+test("without the binding (local runs, tests) nothing is limited", async () => {
+  const res = await worker.fetch(post("/api/snippets", "203.0.113.7"), { SHARE: tag("share"), ASSETS: tag("assets") });
+  assert.equal(await res.text(), "share:/api/snippets");
+});
+
+test("a POST with no address header is limited under one shared key rather than skipped", async () => {
+  const SHARE_LIMIT = limiter(5);
+  await worker.fetch(post("/api/snippets"), { SHARE: tag("share"), ASSETS: tag("assets"), SHARE_LIMIT });
+  assert.deepEqual(SHARE_LIMIT.calls, ["unknown"]);
+});
+
+test("the wrangler config declares the SHARE_LIMIT binding the Worker uses", async () => {
+  const jsonc = await readFile(new URL("../wrangler.app.jsonc", import.meta.url), "utf8");
+  const [limit] = JSON.parse(jsonc.replace(/^\s*\/\/.*$/gm, "")).ratelimits;
+  assert.equal(limit.name, "SHARE_LIMIT");
+  assert.deepEqual(limit.simple, { limit: 10, period: 60 });
+});

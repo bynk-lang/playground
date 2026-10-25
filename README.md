@@ -172,7 +172,7 @@ CI deploys the service with [`bynk-deploy`](https://github.com/bynk-lang/bynk-de
 
 From then on every push to `main` redeploys the service, and the app deploys with the `SHARE` binding. Until the lock is committed the job only prints the plan (`bynk deploy --dry-run`), on pull requests too.
 
-Things to know: the Worker is named `snippets` (the Bynk context's name) in your account; `POST /api/snippets` is open to anyone who can reach it and writes to KV, bounded by the 64 KiB `Source` refinement and the 30-day expiry but not rate limited; and the service's own `workers.dev` address, if `bynk deploy` enables one, is reachable directly.
+Things to know: the Worker is named `snippets` (the Bynk context's name) in your account; `POST /api/snippets` is open to anyone who can reach it and writes to KV, bounded by the 64 KiB `Source` refinement and the 30-day expiry, and rate limited by the app Worker to 10 creates a minute per client address (the `SHARE_LIMIT` binding; over the limit answers `429` and the app falls back to the self-contained link; reads are not limited, and the share Worker's own `workers.dev` address, if enabled, bypasses it); and the service's own `workers.dev` address, if `bynk deploy` enables one, is reachable directly.
 
 ## Highlighting
 
