@@ -23,6 +23,7 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 | `src/app.ts` | The app: editor (CodeMirror 6), compile, diagnostics, run, deep-link, Share, examples picker. |
 | `src/examples.ts` | The examples gallery — curated, **runnable** in-process snippets; the header picker loads them. `test/examples.test.mjs` compiles and runs every one. |
 | `test/e2e/` | Browser tests with no extra dependencies: build for two localhost ports, serve with a fake share service, drive headless Chrome over DevTools. Covers the run round trip, tabs, gallery, tour, share and fork, restore and Recent, theme and phone layout. |
+| `worker/app.mjs` | The app Worker: sends `/api/*` to the share service over the `SHARE` binding (503 when unbound), serves everything else from the assets. |
 | `src/gallery.ts` | The searchable examples dialog (cards with a blurb and code peek). |
 | `fonts/` | The editor's code font: JetBrainsMono Nerd Font, trimmed woff2 with its ligatures (`calt`) kept, under the SIL OFL. See `fonts/README.md`. |
 | `src/store.ts` | Per-browser memory: the autosaved draft, the last 10 snippets you ran and the tour steps you have passed (localStorage, every access guarded). `test/store.test.mjs` covers the recent-list logic. |
@@ -146,9 +147,19 @@ cd /tmp/share-js/workers/snippets && npx wrangler@4 dev --port 8799 --local
 curl -X POST :8080/api/snippets -d '{"source":"context x.y\n"}'   # → {"id":"…"}
 ```
 
-**Not deployed yet.** CI checks the service but does not deploy it. Deploying it means
-`wrangler deploy` with a real KV namespace bound as `KV`, plus a route sending
-`playground.bynk-lang.dev/api/*` to it ahead of the app Worker's custom domain.
+### Deploying it
+
+CI deploys the service with [`bynk-deploy`](https://github.com/bynk-lang/bynk-deploy) (the `deploy-share` job in `ci.yml`): `bynk deploy` compiles `share/`, creates its KV namespace (`snippets`) and uploads the Worker `snippets`. The app Worker then reaches it over a **service binding** (`SHARE`): `worker/app.mjs` runs first only for `/api/*` and forwards those calls, so the browser still talks to the app origin and CORS never comes into it. The binding is added (`scripts/with-share-binding.mjs`) only in a run that has just deployed the share service, because Cloudflare rejects a binding to a Worker that does not exist. Without it `/api/*` answers `503` and Share falls back to the self-contained `#…` link, so the app never depends on the service being up.
+
+**First deploy (once):**
+
+1. Give the existing `CLOUDFLARE_API_TOKEN` **Account → Workers KV Storage → Edit** as well as Workers Scripts → Edit.
+2. Run **Actions → CI → Run workflow** on `main` with `bootstrap_share` ticked. It creates the namespace and deploys the Worker, the app deploys with the binding, and the run uploads a `share-bynk-deploy-lock` artifact.
+3. Commit that file as `share/bynk.deploy.lock`. It holds the namespace id; without it every run would create a fresh, empty namespace and the stored snippets would be lost.
+
+From then on every push to `main` redeploys the service. Until the lock is committed the job only prints the plan (`bynk deploy --dry-run`), on pull requests too.
+
+Things to know: the Worker is named `snippets` (the Bynk context's name) in your account; `POST /api/snippets` is open to anyone who can reach it and writes to KV, bounded by the 64 KiB `Source` refinement and the 30-day expiry but not rate limited; and the service's own `workers.dev` address, if `bynk deploy` enables one, is reachable directly.
 
 ## Highlighting
 

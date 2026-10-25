@@ -6,3 +6,4 @@ src/vendor/
 .wrangler/
 share/src/out/
 .e2e-dist/
+wrangler.app.share.jsonc

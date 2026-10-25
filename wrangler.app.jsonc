@@ -1,11 +1,16 @@
-// The app origin: the editor + the wasm compiler. An assets-only Worker serving
+// The app origin: the editor + the wasm compiler. A Worker serving
 // dist/, reachable at playground.bynk-lang.workers.dev and served at
 // playground.bynk-lang.dev. The sandbox is a separate Worker on a separate
 // origin (wrangler.sandbox.jsonc); never merge the two (ADR 0140).
+//
+// worker/app.mjs runs first only for /api/* and forwards it to the share service over
+// the SHARE service binding, which ci.yml adds (scripts/with-share-binding.mjs) in a run
+// that deployed the share service. Everything else is served straight from dist/.
 {
   "name": "playground",
   "compatibility_date": "2026-10-01",
-  "assets": { "directory": "./dist" },
+  "main": "./worker/app.mjs",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
   "workers_dev": true,
   "routes": [{ "pattern": "playground.bynk-lang.dev", "custom_domain": true }]
 }
