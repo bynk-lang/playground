@@ -56,6 +56,16 @@ test("the opening program runs by itself across the sandbox origin", { skip }, a
   assert.equal(await page.eval(`document.getElementById("sandbox").src.startsWith(location.origin)`), false, "sandbox is on its own origin");
 });
 
+test("a program with no capabilities runs: it has no compose.js, and the sandbox must still find its handler", { skip }, async () => {
+  // The reported snippet: no `consumes`, no `given`, so the compiler emits no composition root.
+  share.store.set("nocap", "context demo.records\n\ntype Point = { x: Int, y: Int }\n\nservice make {\n  on call() -> Effect[Point] {\n    Point { x: 3, y: 4 }\n  }\n}\n");
+  await fresh("?s=nocap");
+  assert.equal(await status(), "ran");
+  const out = await page.text("#output");
+  assert.match(out, /⇒ \{"x":3,"y":4\}/);
+  assert.doesNotMatch(out, /No zero-argument/);
+});
+
 test("a broken program shows the error and does not run", { skip }, async () => {
   await fresh();
   await page.type("zzz ");
@@ -244,6 +254,52 @@ test("the last snippet is restored, Recent lists runs, Start fresh resets", { sk
   await page.click("#start-fresh");
   await page.waitFor(`!document.querySelector(".cm-content").innerText.includes("// scratch")`, "the default program");
   assert.equal(await page.visible("#restored-note"), false);
+});
+
+// Whether a Recent entry's source contains `text` (cards show only a peek of it).
+const recentHas = (text) =>
+  page.eval(`JSON.parse(localStorage.getItem("bynk-recent") ?? "[]").some((r) => r.src.includes(${JSON.stringify(text)}))`);
+
+test("work that was never run is kept under Recent when an example replaces it", { skip }, async () => {
+  await fresh();
+  await page.type(SCRATCH);
+  await page.click("#examples");
+  await page.click("#gallery-grid .card:nth-child(2)");
+  await settled();
+  assert.ok(!(await page.editor()).includes("// scratch"));
+
+  assert.equal(await recentHas("// scratch"), true, "the replaced work is under Recent");
+  await page.click("#examples");
+  await page.click("#recent-grid .card");
+  await settled();
+  assert.ok((await page.editor()).includes("// scratch"));
+});
+
+test("exiting the tour puts back what the editor held", { skip }, async () => {
+  await fresh();
+  await page.type(SCRATCH);
+  await page.click("#tour-btn");
+  await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 1 of")`, "tour step 1");
+  assert.ok(!(await page.editor()).includes("// scratch"));
+  await page.click("#tour-exit");
+  assert.ok((await page.editor()).includes("// scratch"));
+  assert.equal(await page.eval(`location.search`), "", "the ?tour= link is dropped");
+  await settled();
+  assert.equal(await recentHas("context tour."), false, "the tour's code is not kept");
+});
+
+test("opening a shared link keeps the saved draft under Recent", { skip }, async () => {
+  await fresh();
+  await page.type(SCRATCH);
+  await page.click("#share");
+  await page.waitFor(`document.getElementById("share-url").value.includes("?s=")`, "a short link");
+  const link = await page.eval(`document.getElementById("share-url").value`);
+  await page.eval(`document.getElementById("share-sheet").close()`);
+  await page.eval(`localStorage.setItem("bynk-draft", "context my.draft\\n")`);
+
+  await page.goto(link);
+  await settled();
+  assert.equal(await recentHas("my.draft"), true);
 });
 
 test("the theme toggle switches and is remembered", { skip }, async () => {

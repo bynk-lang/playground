@@ -29,6 +29,7 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 | `fonts/` | The editor's code font: JetBrainsMono Nerd Font, trimmed woff2 with its ligatures (`calt`) kept, under the SIL OFL. See `fonts/README.md`. |
 | `src/store.ts` | Per-browser memory: the autosaved draft, the last 10 snippets you ran and the tour steps you have passed (localStorage, every access guarded). `test/store.test.mjs` covers the recent-list logic. |
 | `src/tour.ts` | The guided tour: nine small programs to fix, each with a `check`. `test/tour.test.mjs` proves every starter fails its check and every solution passes. |
+| `src/entry.ts` | Which emitted module the sandbox runs: `compose.js` for a program with capabilities, the context module's own `__makeSurface` for one with none (the compiler emits no `compose.js` then). |
 | `src/sandbox.ts` | The execution document: links the JS graph to blob-URL modules, runs it in a Worker under a wall-clock timeout, posts results back. |
 | live diagnostics | A CodeMirror linter (in `src/app.ts`) calls `bynk_analyze` (debounced, on-type) → inline squiggles + gutter. Non-bailing — type errors in a context show live, not only on Run. |
 | hover + completion | `src/app.ts` calls `bynk_hover` (the inferred type at the cursor) and `bynk_complete` (context-aware candidates). |

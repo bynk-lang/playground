@@ -243,4 +243,19 @@ service run {
 }
 `,
   },
+  {
+    id: "plain",
+    title: "No capabilities",
+    blurb: "A service that asks for nothing: no consumes, no given.",
+    source: `context demo.plain
+
+type Point = { x: Int, y: Int }
+
+service make {
+  on call() -> Effect[Point] {
+    Point { x: 3, y: 4 }
+  }
+}
+`,
+  },
 ];
