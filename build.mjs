@@ -111,9 +111,8 @@ for (const font of new Set(html.match(/\.\/fonts\/[\w-]+\.woff2/g))) {
 }
 await writeFile(`${OUT}/index.html`, html);
 await cp("sandbox.html", `${OUT}/sandbox.html`);
-// The font's licence travels with it.
-await mkdir(`${OUT}/fonts`, { recursive: true });
-await cp("fonts/OFL.txt", `${OUT}/fonts/OFL.txt`);
+// The fonts' licences travel with them.
+await cp("fonts", `${OUT}/fonts`, { recursive: true, filter: (src) => !src.endsWith(".woff2") && !src.endsWith("README.md") });
 // Icons and the link-preview image (assets/README.md). Unhashed: their URLs are published
 // (favicons, the og:image in shared links).
 await cp("assets", OUT, { recursive: true, filter: (src) => !src.endsWith("README.md") });
