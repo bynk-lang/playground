@@ -3,10 +3,15 @@
 // (wrangler.app.jsonc): that separation is the safety boundary (ADR 0140).
 // Reachable at playground-sandbox.bynk-lang.workers.dev and served at
 // sandbox.bynk-lang.dev.
+//
+// worker/sandbox.mjs runs first for every request: it serves only the execution
+// document and redirects everything else to the app origin (APP_ORIGIN).
 {
   "name": "playground-sandbox",
   "compatibility_date": "2026-10-01",
-  "assets": { "directory": "./dist" },
+  "main": "./worker/sandbox.mjs",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
+  "vars": { "APP_ORIGIN": "https://playground.bynk-lang.dev" },
   "workers_dev": true,
   "routes": [{ "pattern": "sandbox.bynk-lang.dev", "custom_domain": true }]
 }
