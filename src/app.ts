@@ -573,6 +573,14 @@ function mountSharedNote(): void {
   });
 }
 
+// A shared link replaces the editor, and the first edit would then replace the saved
+// draft: keep that draft under Recent first.
+function keepStoredDraft(): void {
+  if (EMBED) return;
+  const draft = loadDraft();
+  if (draft && draft.trim() !== "" && draft !== DEFAULT_SOURCE) rememberRun(draft);
+}
+
 // The initial program: a `?s=<id>` shared snippet (via the service), else a `#hash`
 // snippet, else the default example.
 async function loadInitialSource(): Promise<string> {
@@ -584,6 +592,7 @@ async function loadInitialSource(): Promise<string> {
       const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`);
       if (res.ok) {
         openedShared = true;
+        keepStoredDraft();
         return ((await res.json()) as { source: string }).source;
       }
     } catch {
@@ -593,6 +602,7 @@ async function loadInitialSource(): Promise<string> {
   const fromHash = await decodeSnippet(location.hash);
   if (fromHash !== null && fromHash !== undefined) {
     openedShared = true;
+    keepStoredDraft();
     return fromHash;
   }
   // No link: pick up where the last visit left off.
@@ -605,8 +615,24 @@ async function loadInitialSource(): Promise<string> {
   return DEFAULT_SOURCE;
 }
 
-function setEditorContent(src: string): void {
+// What the app last put in the editor itself: an example, a Recent entry, a tour step, a
+// shared snippet or the default program. Anything else there is the user's own work.
+let pristine: string | null = null;
+
+// Keep the user's own work under Recent before the editor is replaced, so loading an
+// example, a Recent entry, Start fresh or the tour never loses a program that was never
+// run (#23). The tour's own code is not kept: exiting the tour restores what was there.
+function keepOutgoing(): void {
+  if (EMBED || tourIndex >= 0) return;
+  const src = source();
+  if (src.trim() !== "" && src !== pristine) rememberRun(src);
+}
+
+// `own`: `src` is the user's work (a restored draft), not something the app supplied.
+function setEditorContent(src: string, own = false): void {
+  keepOutgoing();
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: src } });
+  pristine = own ? null : src;
   view.focus();
 }
 
@@ -675,8 +701,17 @@ function renderProse(el: HTMLElement, text: string): void {
 
 // `fresh` is false when the page opened on this step: the editor already holds the
 // starter and the first-run path runs it once the compiler is ready.
+// What the editor held before the tour, restored when it ends, and whether that was the
+// user's own work.
+let preTour: string | null = null;
+let preTourOwn = false;
+
 function showTourStep(i: number, fresh = true): void {
   const step = TOUR[i];
+  if (tourIndex < 0 && fresh) {
+    preTour = source();
+    preTourOwn = preTour !== pristine;
+  }
   tourIndex = i;
   tourDone = false;
   currentExampleId = null;
@@ -699,10 +734,21 @@ function showTourStep(i: number, fresh = true): void {
   void compileAndRun();
 }
 
-function exitTour(): void {
+// Leave the tour and put back what the editor held before it (or, when the page opened
+// on a tour step, the saved draft). `run`: run it too, as the editor did before the tour.
+function exitTour(run = false): void {
+  if (tourIndex < 0) return;
+  // Opened on a tour step: the saved draft is what the editor would have held.
+  const own = preTour === null || preTourOwn;
+  const back = preTour ?? (EMBED ? null : loadDraft());
+  preTour = null;
+  // Restored while the tour is still on, so the tour's code is not kept under Recent.
+  if (back !== null && back.trim() !== "") setEditorContent(back, own);
   tourIndex = -1;
   $("tour").hidden = true;
   $("tour-btn").setAttribute("aria-pressed", "false");
+  window.history.replaceState(null, "", location.pathname);
+  if (run && back !== null) void compileAndRun();
 }
 
 async function checkTour(): Promise<void> {
@@ -735,14 +781,14 @@ function nextTour(): void {
 
 function mountTour(): void {
   $("tour-btn").addEventListener("click", () =>
-    tourIndex >= 0 ? exitTour() : showTourStep(nextIncomplete(TOUR.map((s) => s.id), loadTourDone())),
+    tourIndex >= 0 ? exitTour(true) : showTourStep(nextIncomplete(TOUR.map((s) => s.id), loadTourDone())),
   );
   $("tour-restart").addEventListener("click", () => {
     resetTourDone();
     showTourStep(0);
   });
   updateTourButton();
-  $("tour-exit").addEventListener("click", exitTour);
+  $("tour-exit").addEventListener("click", () => exitTour(true));
   $("tour-check").addEventListener("click", () => void checkTour());
   $("tour-next").addEventListener("click", nextTour);
   $("tour-solution").addEventListener("click", () => {
@@ -819,7 +865,9 @@ function mountSandbox(): void {
 async function main(): Promise<void> {
   setStatus("loading…", "busy");
   mountSandbox();
-  makeEditor(await loadInitialSource());
+  const initial = await loadInitialSource();
+  makeEditor(initial);
+  pristine = restoredDraft ? null : initial;
   mountExamples();
   mountTour();
   mountShareSheet();
