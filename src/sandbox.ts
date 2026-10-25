@@ -9,6 +9,8 @@
 // The Worker captures `Logger` output and the entry's return value and posts them
 // back; nothing else crosses the boundary.
 
+import { pickEntry } from "./entry";
+import type { EntryKind } from "./entry";
 import { APP_ORIGIN } from "./shared";
 import type { EmittedFile, RunReply, RunRequest } from "./shared";
 
@@ -36,13 +38,14 @@ function importsOf(contents: string): string[] {
 }
 
 /**
- * Link the emitted module graph into blob-URL ES modules and return the entry
- * (`compose.js`) blob URL. The graph is a DAG (runtime → bynk → binding → context
- * → compose), so we create blobs in dependency order, rewriting each module's
+ * Link the emitted module graph into blob-URL ES modules and return the entry's blob
+ * URL (`compose.js`, or for a program with no capabilities the context module itself:
+ * see entry.ts). The graph is a DAG (runtime → bynk → binding → context → compose), so
+ * we create blobs in dependency order, rewriting each module's
  * relative specifiers to the already-created blob URLs of its targets. (Workers
  * don't support import maps, so specifier rewriting is the portable approach.)
  */
-function linkGraph(files: EmittedFile[]): { entry: string | null; urls: string[] } {
+function linkGraph(files: EmittedFile[]): { entry: string | null; kind: EntryKind; urls: string[] } {
   const byPath = new Map<string, EmittedFile>();
   for (const f of files) byPath.set(f.path, f);
 
@@ -73,12 +76,13 @@ function linkGraph(files: EmittedFile[]): { entry: string | null; urls: string[]
   };
 
   for (const f of files) build(f.path);
-  const entry = byPath.has("compose.js") ? blobUrls.get("compose.js")! : null;
-  return { entry: entry ?? null, urls: created };
+  const picked = pickEntry(files);
+  return { entry: picked ? blobUrls.get(picked.path)! : null, kind: picked?.kind ?? "compose", urls: created };
 }
 
 // The Worker bootstrap (a classic script, instantiated from a blob): imports the linked
-// entry, instantiates the composition root, invokes the single zero-argument
+// entry, instantiates the composition root (or, with no capabilities, the context's own
+// surface), invokes the single zero-argument
 // service handler, and reports captured logs + the returned value. Console output
 // (the `Logger` provider) is intercepted in-Worker.
 const WORKER_SRC = `
@@ -89,14 +93,17 @@ console.info = console.log;
 console.error = (...a) => logs.push({ level: "error", message: a.map(fmt).join(" ") });
 console.warn = console.error;
 self.onmessage = async (e) => {
-  const { entryUrl } = e.data;
+  const { entryUrl, kind } = e.data;
   try {
     const mod = await import(entryUrl);
-    if (typeof mod.composeApp !== "function") {
+    // A program with capabilities enters through compose.js; one without has no
+    // composition root, and its context module exports the surface directly (entry.ts).
+    const make = kind === "surface" ? () => ({ context: mod.__makeSurface({}) }) : mod.composeApp;
+    if (typeof make !== "function") {
       self.postMessage({ logs, noEntry: true });
       return;
     }
-    const app = mod.composeApp();
+    const app = make();
     let invoked = false, value;
     for (const ctxKey of Object.keys(app)) {
       const surface = app[ctxKey];
@@ -127,10 +134,12 @@ function reply(msg: RunReply): void {
 
 function run(req: RunRequest): void {
   let entry: string | null;
+  let kind: EntryKind = "compose";
   let urls: string[] = [];
   try {
     const linked = linkGraph(req.files);
     entry = linked.entry;
+    kind = linked.kind;
     urls = linked.urls;
   } catch (err) {
     reply({ kind: "bynk-result", id: req.id, logs: [], error: `link error: ${String(err)}` });
@@ -187,7 +196,7 @@ function run(req: RunRequest): void {
     reply({ kind: "bynk-result", id: req.id, logs: [], error: e.message || "worker error" });
   };
 
-  worker.postMessage({ entryUrl: entry });
+  worker.postMessage({ entryUrl: entry, kind });
 }
 
 window.addEventListener("message", (e: MessageEvent) => {
