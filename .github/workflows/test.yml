@@ -71,6 +71,7 @@ jobs:
       - name: Unit tests + gallery examples
         run: npm test
       - name: Browser tests
+        timeout-minutes: 5
         # Drives the built app in the runner's preinstalled Chrome (test/e2e).
         env:
           REQUIRE_CHROME: "1"

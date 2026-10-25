@@ -9,6 +9,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      bootstrap_share:
+        description: >-
+          First share-service deploy only: create its KV namespace even though
+          share/bynk.deploy.lock is not committed yet. Commit the lock this run
+          uploads, or the next run would create a second, empty namespace.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -53,9 +61,81 @@ jobs:
           working-directory: share
           source: src
 
+  # The share service: the Bynk program in share/, deployed with bynk-deploy as the
+  # Worker `snippets` with a KV namespace. It deploys live only on main with the
+  # Cloudflare credentials and a committed share/bynk.deploy.lock (that file is what
+  # stops every run from creating a fresh namespace); otherwise it checks the plan.
+  # The app Worker reaches it through a service binding in the `deploy` job below.
+  deploy-share:
+    name: Deploy share service
+    needs: [test, audit, share]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      live: ${{ steps.mode.outputs.live }}
+    concurrency:
+      group: deploy-share-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Decide between a deploy and a plan
+        id: mode
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ON_MAIN: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          BOOTSTRAP: ${{ inputs.bootstrap_share }}
+        run: |
+          echo "tag=$(tr -d '[:space:]' < BYNK_VERSION)" >> "$GITHUB_OUTPUT"
+          if [ "$ON_MAIN" != true ]; then
+            echo "live=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are not set; planning the share service only."
+            echo "live=false" >> "$GITHUB_OUTPUT"
+          elif [ -f share/bynk.deploy.lock ] || [ "$BOOTSTRAP" = true ]; then
+            echo "live=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::share/bynk.deploy.lock is not committed, so the share service is only planned. Run this workflow by hand on main with bootstrap_share set, then commit the lock it uploads. See README.md §Share service."
+            echo "live=false" >> "$GITHUB_OUTPUT"
+          fi
+      # The API token reaches only this step (the action sets it for `bynk deploy`).
+      - name: Deploy the share service
+        id: deploy
+        if: steps.mode.outputs.live == 'true'
+        uses: bynk-lang/bynk-deploy@5b76fe1c04f3782757020e05db15fed1e4026399 # v2
+        with:
+          version: ${{ steps.mode.outputs.tag }}
+          working-directory: share
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Plan the share service
+        if: steps.mode.outputs.live != 'true'
+        uses: bynk-lang/bynk-deploy@5b76fe1c04f3782757020e05db15fed1e4026399 # v2
+        with:
+          version: ${{ steps.mode.outputs.tag }}
+          working-directory: share
+          dry-run: "true"
+          plan-format: text
+      # A first deploy writes the namespace id into the lock. Without it committed,
+      # the next run would create another namespace and the stored snippets would be lost.
+      - name: Keep the lock the deploy wrote
+        if: steps.deploy.outputs.lock-changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: share-bynk-deploy-lock
+          path: share/bynk.deploy.lock
+      - name: Say the lock must be committed
+        if: steps.deploy.outputs.lock-changed == 'true'
+        run: echo "::warning::The share deploy changed share/bynk.deploy.lock. Download the share-bynk-deploy-lock artifact and commit it to share/bynk.deploy.lock before the next deploy."
+
   deploy:
     name: Deploy (Workers)
-    needs: [test, audit, share]
+    # The share deploy gates only the binding, never the app: if it fails or is skipped
+    # the app still deploys, without the SHARE binding, and Share falls back to #hash links.
+    needs: [test, audit, share, deploy-share]
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.audit.result == 'success' && needs.share.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # One deploy at a time, and never cancel one half-way.
@@ -94,6 +174,20 @@ jobs:
       # Production origins are build.mjs's defaults.
       - name: Bundle
         run: npm run build
+      # Bind the share service only in a run that has just deployed it: Cloudflare
+      # rejects an upload that binds a Worker that does not exist.
+      - name: Choose the app config
+        id: appconfig
+        env:
+          SHARE_LIVE: ${{ needs.deploy-share.outputs.live }}
+          SHARE_RESULT: ${{ needs.deploy-share.result }}
+        run: |
+          if [ "$SHARE_LIVE" = true ] && [ "$SHARE_RESULT" = success ]; then
+            node scripts/with-share-binding.mjs
+            echo "config=wrangler.app.share.jsonc" >> "$GITHUB_OUTPUT"
+          else
+            echo "config=wrangler.app.jsonc" >> "$GITHUB_OUTPUT"
+          fi
       # Two Workers, two origins. That separation is the safety boundary
       # (ADR 0140): untrusted snippet code runs only on the sandbox origin.
       - name: Deploy the app (playground.bynk-lang.dev)
@@ -101,7 +195,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4.152.0 deploy --config wrangler.app.jsonc
+          CONFIG: ${{ steps.appconfig.outputs.config }}
+        run: npx --yes wrangler@4.152.0 deploy --config "$CONFIG"
       - name: Deploy the sandbox (sandbox.bynk-lang.dev)
         if: steps.mode.outputs.live == 'true'
         env:
@@ -110,6 +205,11 @@ jobs:
         run: npx --yes wrangler@4.152.0 deploy --config wrangler.sandbox.jsonc
       - name: Dry run both Workers
         if: steps.mode.outputs.live != 'true'
+        env:
+          CONFIG: ${{ steps.appconfig.outputs.config }}
         run: |
-          npx --yes wrangler@4.152.0 deploy --config wrangler.app.jsonc --dry-run
+          npx --yes wrangler@4.152.0 deploy --config "$CONFIG" --dry-run
+          # The binding variant too, so a mistake in it fails before a live run meets it.
+          node scripts/with-share-binding.mjs
+          npx --yes wrangler@4.152.0 deploy --config wrangler.app.share.jsonc --dry-run
           npx --yes wrangler@4.152.0 deploy --config wrangler.sandbox.jsonc --dry-run
