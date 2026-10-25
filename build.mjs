@@ -57,6 +57,8 @@ await esbuild.build({ ...common, entryPoints: { sandbox: "src/sandbox.ts" }, for
 // Static assets + the wasm module (fetched at runtime from the deploy root).
 await cp("index.html", "dist/index.html");
 await cp("sandbox.html", "dist/sandbox.html");
+// The self-hosted code font (JetBrainsMono Nerd Font, trimmed; see fonts/README.md).
+await cp("fonts", "dist/fonts", { recursive: true });
 await cp("src/vendor/bynk_wasm_bg.wasm", "dist/bynk_wasm_bg.wasm");
 // web-tree-sitter highlighting (slice 5b): the runtime + grammar wasm, fetched at
 // runtime from the deploy root. Optional — the app falls back to the stream

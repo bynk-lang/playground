@@ -9,8 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&display=swap"
     />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="./fonts/JetBrainsMonoNerdFont-Regular.woff2" />
     <script>
       // Resolve the theme before first paint: saved choice, else the OS preference.
       (function () {
@@ -23,6 +24,15 @@
       })();
     </script>
     <style>
+      /* The code font: JetBrainsMono Nerd Font, self-hosted (fonts/README.md). Its `calt`
+         feature draws Bynk's <-, ->, => and :: as ligatures. */
+      @font-face { font-family: "JetBrainsMono Nerd Font"; font-weight: 400; font-style: normal; font-display: swap;
+        src: url("./fonts/JetBrainsMonoNerdFont-Regular.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrainsMono Nerd Font"; font-weight: 700; font-style: normal; font-display: swap;
+        src: url("./fonts/JetBrainsMonoNerdFont-Bold.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrainsMono Nerd Font"; font-weight: 400; font-style: italic; font-display: swap;
+        src: url("./fonts/JetBrainsMonoNerdFont-Italic.woff2") format("woff2"); }
+
       /* Tokens: the Bynk Playground design system (tokens.json). */
       :root, [data-theme="dark"] {
         color-scheme: dark;
@@ -48,7 +58,7 @@
       }
       :root {
         --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
-        --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        --font-mono: "JetBrainsMono Nerd Font", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
         --radius-md: 8px; --radius-lg: 14px;
       }
 
@@ -98,6 +108,10 @@
       #editor { min-height: 0; overflow: hidden; }
       .cm-editor { height: 100%; background: var(--surface-panel); color: var(--ink);
         font: 400 13px/22px var(--font-mono); }
+      /* CodeMirror sets its own `monospace` on the scroller, so name our font there too,
+         and keep contextual ligatures on. */
+      .cm-scroller { font-family: var(--font-mono) !important; font-variant-ligatures: contextual;
+        font-feature-settings: "calt" 1, "liga" 1; }
       .cm-gutters { background: var(--surface-panel) !important; color: var(--ink-muted) !important; border: 0 !important; }
       .cm-activeLine { background: color-mix(in srgb, var(--ink) 6%, transparent) !important; }
       .cm-activeLineGutter { background: transparent !important; color: var(--ink) !important; }

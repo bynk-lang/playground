@@ -20,6 +20,7 @@ const TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
   ".wasm": "application/wasm",
+  ".woff2": "font/woff2",
   ".map": "application/json",
   ".scm": "text/plain; charset=utf-8",
 };
