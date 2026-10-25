@@ -135,6 +135,22 @@ test("a run that times out still shows what it logged first", { skip }, async ()
   assert.match(await page.text("#output"), /slow/);
 });
 
+test("a document that takes over the code runner's frame gets no runs and can't answer for them", { skip }, async () => {
+  await fresh();
+  // What a page framing the playground could do: navigate the inner sandbox frame to a
+  // document of its own that answers every message with a made-up result.
+  const spoof = `<script>
+    onmessage = (e) => parent.postMessage({ kind: "bynk-result", id: e.data && e.data.id, logs: [], value: "spoofed" }, "*");
+    parent.postMessage({ kind: "bynk-sandbox-ready" }, "*");
+  </script>`;
+  await page.eval(`document.getElementById("sandbox").contentWindow.location = ${JSON.stringify(`data:text/html,${encodeURIComponent(spoof)}`)}`);
+  await new Promise((r) => setTimeout(r, 1000));
+  await page.click("#run");
+  await new Promise((r) => setTimeout(r, 1000));
+  assert.doesNotMatch(await page.text("#output"), /spoofed/, "a made-up result is never shown");
+  assert.equal(await status(), "sandbox not ready", "the run is not sent to the new document");
+});
+
 test("Ctrl+Enter runs from outside the editor", { skip }, async () => {
   await fresh();
   await page.eval(`document.getElementById("share").focus(); document.getElementById("output").textContent = ""`);

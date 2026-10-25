@@ -3,7 +3,7 @@
 // Two origins, by design (the safety boundary — ADR 0140): the **app** origin
 // hosts the editor + the wasm compiler; the **sandbox** origin hosts the
 // execution document (a sandboxed iframe wrapping a Web Worker). They talk only
-// over `postMessage`, each validating the other.
+// over a `MessageChannel` the app hands the sandbox once it says it is ready.
 //
 // Origins are injected at build time (esbuild `define`); the defaults are the
 // production hosts, overridden to localhost ports for local verification.
@@ -72,4 +72,11 @@ export interface RunReply {
 /// sandbox → app, once: the execution document is ready to receive runs.
 export interface SandboxReady {
   kind: "bynk-sandbox-ready";
+}
+
+/// app → sandbox, once, in answer to `SandboxReady`: carries the `MessagePort` that every
+/// `RunRequest` and `RunReply` then travels over. A document that later takes over the
+/// frame never holds the port, so it neither receives runs nor can answer for them (#30).
+export interface SandboxConnect {
+  kind: "bynk-connect";
 }

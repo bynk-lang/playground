@@ -12,7 +12,7 @@
 import { pickEntry } from "./entry";
 import type { EntryKind } from "./entry";
 import { APP_ORIGIN } from "./shared";
-import type { EmittedFile, RunReply, RunRequest } from "./shared";
+import type { EmittedFile, RunReply, RunRequest, SandboxConnect } from "./shared";
 
 /** Resolve a relative import specifier against the importing module's path. */
 function resolvePath(fromPath: string, spec: string): string {
@@ -132,10 +132,12 @@ self.onmessage = async (e) => {
 // cannot exhaust memory here or in the app.
 const MAX_LOGS = 1000;
 
+// The private channel from the app, handed over once in answer to "ready" (#30). Runs
+// arrive and results leave only over it, never as window messages.
+let port: MessagePort | null = null;
+
 function reply(msg: RunReply): void {
-  // The app is a real origin; target it precisely. (This document's own origin is
-  // opaque under `sandbox=allow-scripts`, so the app validates by window identity.)
-  parent.postMessage(msg, APP_ORIGIN);
+  port?.postMessage(msg);
 }
 
 // The run in progress. A new run stops it: the app shows only the newest outcome, so a
@@ -243,10 +245,15 @@ function run(req: RunRequest): void {
 }
 
 window.addEventListener("message", (e: MessageEvent) => {
-  // Only ever act on the app origin's instructions.
-  if (e.origin !== APP_ORIGIN) return;
-  const data = e.data as RunRequest;
-  if (data && data.kind === "bynk-run") run(data);
+  // Only ever take the channel from the app origin, and only once.
+  if (e.origin !== APP_ORIGIN || port) return;
+  const data = e.data as SandboxConnect;
+  if (data?.kind !== "bynk-connect" || !e.ports[0]) return;
+  port = e.ports[0];
+  port.onmessage = (m: MessageEvent) => {
+    const req = m.data as RunRequest;
+    if (req?.kind === "bynk-run") run(req);
+  };
 });
 
 // Announce readiness so the app doesn't race the iframe load.
