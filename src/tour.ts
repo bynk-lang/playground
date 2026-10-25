@@ -204,4 +204,160 @@ service check {
     hint: "Only the input string needs to change.",
     check: (o) => (!o.compiled ? "Still not compiling." : o.value === "true" ? null : "The slug was rejected: it is not all lowercase letters."),
   },
+  {
+    id: "functions",
+    title: "Functions",
+    prose:
+      "A `fn` is a pure function: the same input always gives the same output. It sits in the `context` beside the services and returns its last expression. `if` is an expression too.",
+    task: "`grade` always returns `\"fail\"`. Make `grade(72)` return `\"pass\"` with an `if` on the score.",
+    starter: `${prelude("tour.functions")}
+fn grade(score: Int) -> String {
+  "fail"
+}
+
+service run {
+  on call() -> Effect[String] given Logger {
+    grade(72)
+  }
+}
+`,
+    solution: `${prelude("tour.functions")}
+fn grade(score: Int) -> String {
+  if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
+}
+
+service run {
+  on call() -> Effect[String] given Logger {
+    grade(72)
+  }
+}
+`,
+    hint: "`if cond { a } else { b }` needs both branches.",
+    check: (o) => (!o.compiled ? "Still not compiling." : o.value === "pass" ? null : 'Expected "pass" for a score of 72.'),
+  },
+  {
+    id: "option",
+    title: "Option: a value that may be missing",
+    prose:
+      "There is no `null`. A value that might be absent has the type `Option[T]`, either `Some(value)` or `None`, and `match` makes you handle both. `first()` returns the first element of a list, if there is one.",
+    task: "Cover the missing `None` case, returning `\"empty\"`.",
+    starter: `${prelude("tour.option")}
+service run {
+  on call() -> Effect[String] given Logger {
+    let xs = [3, 8, 12]
+    match xs.first() {
+      Some(n) => "first is \\(n)",
+    }
+  }
+}
+`,
+    solution: `${prelude("tour.option")}
+service run {
+  on call() -> Effect[String] given Logger {
+    let xs = [3, 8, 12]
+    match xs.first() {
+      Some(n) => "first is \\(n)",
+      None => "empty",
+    }
+  }
+}
+`,
+    hint: "The error names the case that is not covered.",
+    check: (o) => (!o.compiled ? "Still not compiling." : o.value === "first is 3" ? null : 'Expected "first is 3".'),
+  },
+  {
+    id: "result",
+    title: "Result: failure in the type",
+    prose:
+      "A function that can fail says so in its return type: `Result[T, E]` is `Ok(value)` or `Err(error)`. The caller cannot reach the value without deciding what to do about the error. Here `parseAge(\"-5\")` fails.",
+    task: "Handle the `Err` case so the program returns `\"problem: negative\"`.",
+    starter: `${prelude("tour.result")}
+fn parseAge(s: String) -> Result[Int, String] {
+  match Int.parse(s) {
+    None => Err("not a number"),
+    Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
+  }
+}
+
+service run {
+  on call() -> Effect[String] given Logger {
+    match parseAge("-5") {
+      Ok(n) => "age \\(n)",
+    }
+  }
+}
+`,
+    solution: `${prelude("tour.result")}
+fn parseAge(s: String) -> Result[Int, String] {
+  match Int.parse(s) {
+    None => Err("not a number"),
+    Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
+  }
+}
+
+service run {
+  on call() -> Effect[String] given Logger {
+    match parseAge("-5") {
+      Ok(n) => "age \\(n)",
+      Err(e) => "problem: \\(e)",
+    }
+  }
+}
+`,
+    hint: "`\\(e)` puts the error text inside a string.",
+    check: (o) => (!o.compiled ? "Still not compiling." : o.value === "problem: negative" ? null : 'Expected "problem: negative".'),
+  },
+  {
+    id: "question",
+    title: "The ? operator",
+    prose:
+      "Inside a function that returns a `Result`, `?` after an expression unwraps an `Ok` and carries on, or returns the `Err` from the function on the spot. It saves a nested `match` for every step that can fail.",
+    task: "`n` is a `Result`, not a number, so `n + 1` does not type-check. Add `?` after `parseAge(s)`.",
+    starter: `${prelude("tour.question")}
+fn parseAge(s: String) -> Result[Int, String] {
+  match Int.parse(s) {
+    None => Err("not a number"),
+    Some(n) => Ok(n),
+  }
+}
+
+fn nextAge(s: String) -> Result[Int, String] {
+  let n = parseAge(s)
+  Ok(n + 1)
+}
+
+service run {
+  on call() -> Effect[Int] given Logger {
+    match nextAge("41") {
+      Ok(n) => n,
+      Err(_) => 0,
+    }
+  }
+}
+`,
+    solution: `${prelude("tour.question")}
+fn parseAge(s: String) -> Result[Int, String] {
+  match Int.parse(s) {
+    None => Err("not a number"),
+    Some(n) => Ok(n),
+  }
+}
+
+fn nextAge(s: String) -> Result[Int, String] {
+  let n = parseAge(s)?
+  Ok(n + 1)
+}
+
+service run {
+  on call() -> Effect[Int] given Logger {
+    match nextAge("41") {
+      Ok(n) => n,
+      Err(_) => 0,
+    }
+  }
+}
+`,
+    hint: "The `?` goes straight after the call, with no space.",
+    check: (o) => (!o.compiled ? "Still not compiling." : o.value === "42" ? null : "Expected 42."),
+  },
 ];

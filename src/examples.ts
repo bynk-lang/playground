@@ -108,4 +108,139 @@ service check {
 }
 `,
   },
+  {
+    id: "functions",
+    title: "Functions and if",
+    blurb: "A pure fn, with if as an expression.",
+    source: `context demo.functions
+
+consumes bynk { Logger }
+
+fn grade(score: Int) -> String {
+  if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
+}
+
+service run {
+  on call() -> Effect[String] given Logger {
+    grade(72)
+  }
+}
+`,
+  },
+  {
+    id: "variants",
+    title: "Variants that carry data",
+    blurb: "A sum type whose cases hold values, matched exhaustively.",
+    source: `context demo.shapes
+
+consumes bynk { Logger }
+
+type Shape =
+  | Circle(r: Int)
+  | Rect(w: Int, h: Int)
+
+fn area(s: Shape) -> Int {
+  match s {
+    Circle(r) => 3 * r * r,
+    Rect(w, h) => w * h,
+  }
+}
+
+service run {
+  on call() -> Effect[Int] given Logger {
+    area(Rect(3, 4))
+  }
+}
+`,
+  },
+  {
+    id: "option",
+    title: "Option",
+    blurb: "No null: a value that may be missing is an Option.",
+    source: `context demo.option
+
+consumes bynk { Logger }
+
+service run {
+  on call() -> Effect[String] given Logger {
+    let xs = [3, 8, 12]
+    match xs.first() {
+      Some(n) => "first is \\(n)",
+      None => "empty",
+    }
+  }
+}
+`,
+  },
+  {
+    id: "result",
+    title: "Result",
+    blurb: "A function that can fail says so in its type.",
+    source: `context demo.result
+
+consumes bynk { Logger }
+
+fn parseAge(s: String) -> Result[Int, String] {
+  match Int.parse(s) {
+    None => Err("not a number"),
+    Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
+  }
+}
+
+service run {
+  on call() -> Effect[String] given Logger {
+    match parseAge("-5") {
+      Ok(n) => "age \\(n)",
+      Err(e) => "problem: \\(e)",
+    }
+  }
+}
+`,
+  },
+  {
+    id: "question",
+    title: "The ? operator",
+    blurb: "Carry on after Ok, or return the Err on the spot.",
+    source: `context demo.question
+
+consumes bynk { Logger }
+
+fn parseAge(s: String) -> Result[Int, String] {
+  match Int.parse(s) {
+    None => Err("not a number"),
+    Some(n) => Ok(n),
+  }
+}
+
+fn nextAge(s: String) -> Result[Int, String] {
+  let n = parseAge(s)?
+  Ok(n + 1)
+}
+
+service run {
+  on call() -> Effect[Int] given Logger {
+    match nextAge("41") {
+      Ok(n) => n,
+      Err(_) => 0,
+    }
+  }
+}
+`,
+  },
+  {
+    id: "lists",
+    title: "Lists and fold",
+    blurb: "Collapse a list to one value with a function.",
+    source: `context demo.lists
+
+consumes bynk { Logger }
+
+service run {
+  on call() -> Effect[Int] given Logger {
+    let xs = [1, 2, 3, 4]
+    xs.fold(0, (acc, x) => acc + x)
+  }
+}
+`,
+  },
 ];

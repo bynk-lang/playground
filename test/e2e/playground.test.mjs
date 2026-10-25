@@ -89,7 +89,7 @@ test("the examples gallery searches and loads an example", { skip }, async () =>
   await fresh();
   await page.click("#examples");
   assert.equal(await page.eval(`document.activeElement.id`), "gallery-search");
-  await page.eval(`(() => { const s = document.getElementById("gallery-search"); s.value = "match"; s.dispatchEvent(new Event("input")); })()`);
+  await page.eval(`(() => { const s = document.getElementById("gallery-search"); s.value = "sum types"; s.dispatchEvent(new Event("input")); })()`);
   assert.equal(await page.eval(`document.querySelectorAll("#gallery-grid .card").length`), 1);
   await page.click("#gallery-grid .card");
   await page.waitFor(`document.getElementById("output").textContent.includes("go")`, "the match example's result");
@@ -105,7 +105,7 @@ test("the tour: a wrong answer gets a hint, the solution passes, progress is rem
   await page.click("#tour-check");
   await page.waitFor(`document.getElementById("tour-feedback").dataset.kind === "ok"`, "step 1 passes");
   assert.equal(await page.eval(`document.getElementById("tour-next").disabled`), false);
-  assert.equal(await page.text("#tour-btn"), "Tour · 1/5");
+  assert.equal(await page.text("#tour-btn"), "Tour · 1/9");
 
   // Step 2 starts failing to compile; Check says so and keeps Next locked.
   await page.click("#tour-next");
@@ -118,7 +118,7 @@ test("the tour: a wrong answer gets a hint, the solution passes, progress is rem
   // A fresh visit offers to continue where the learner left off.
   await page.goto(app.url);
   await settled();
-  assert.equal(await page.text("#tour-btn"), "Tour · 1/5");
+  assert.equal(await page.text("#tour-btn"), "Tour · 1/9");
   await page.click("#tour-btn");
   await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 2 of")`, "resume at step 2");
 });
