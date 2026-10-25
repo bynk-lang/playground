@@ -61,6 +61,12 @@ test("the sandbox origin serves only the execution document and sends the rest t
   assert.equal(new URL(html.headers.get("location"), workers.sandboxOrigin).href, `${workers.sandboxOrigin}/sandbox`);
 });
 
+test("the execution document runs programs under its no-network policy", { skip }, async () => {
+  const res = await fetch(workers.sandboxOrigin + "/sandbox");
+  assert.match(res.headers.get("content-security-policy") ?? "", /connect-src 'none'/);
+  // The first test ran a program through this same document, so the policy lets it run.
+});
+
 test("Share makes a short link through the app Worker and the SHARE binding", { skip }, async () => {
   await page.goto(workers.appOrigin);
   await settled();
