@@ -5,6 +5,7 @@
 // found. Run: `npm run test:e2e` (after `npm run fetch:assets`).
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { deflateRawSync } from "node:zlib";
 import { findChrome, launchBrowser, startApp, startFakeShare } from "./harness.mjs";
 
 const chrome = findChrome();
@@ -76,6 +77,37 @@ test("the result tabs: Logs counts lines, arrow keys move between tabs", { skip 
   assert.match(await page.text("#output"), /\/\/ .*\.js/, "Compiled JS lists the emitted files");
   await page.key("Home");
   assert.equal(await page.eval(`document.querySelector("[role=tab][aria-selected=true]").id`), "tab-result");
+});
+
+// A `#…` link to `source` (src/deeplink.ts: base64url of deflate-raw).
+const hashLink = (source) => `${app.url}#${deflateRawSync(Buffer.from(source)).toString("base64url")}`;
+
+// Runs for far longer than the 3 s budget, so it is still going when a later run starts.
+const SLOW = `context demo.slow
+
+consumes bynk { Logger }
+
+service s {
+  on call() -> Effect[Int] given Logger {
+    let _ <- Logger.info("slow")
+    fib(45)
+  }
+}
+
+fn fib(n: Int) -> Int {
+  if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+}
+`;
+
+test("a run that times out still shows what it logged first", { skip }, async () => {
+  await fresh();
+  await page.goto("about:blank");
+  await page.goto(hashLink(SLOW));
+  await page.waitFor(`document.getElementById("status").textContent === "run failed"`, "the run to time out", 10000);
+  assert.match(await page.text("#output"), /exceeded 3000 ms[\s\S]*logged 1 line first/);
+  assert.equal(await page.text("#logs-badge"), "1");
+  await page.click("#tab-logs");
+  assert.match(await page.text("#output"), /slow/);
 });
 
 test("Ctrl+Enter runs from outside the editor", { skip }, async () => {

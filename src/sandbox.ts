@@ -81,19 +81,21 @@ function linkGraph(files: EmittedFile[]): { entry: string | null; urls: string[]
 // entry, instantiates the composition root, invokes the single zero-argument
 // service handler, and reports captured logs + the returned value. Console output
 // (the `Logger` provider) is intercepted in-Worker.
+// Each log line is posted as it is written, not held until the end, so a run that times
+// out still reports what it logged before it hung (#28). The final message has `done`.
 const WORKER_SRC = `
-const logs = [];
 const fmt = (v) => { try { return typeof v === "string" ? v : JSON.stringify(v); } catch { return String(v); } };
-console.log = (...a) => logs.push({ level: "info", message: a.map(fmt).join(" ") });
+const log = (level, a) => self.postMessage({ log: { level, message: a.map(fmt).join(" ") } });
+console.log = (...a) => log("info", a);
 console.info = console.log;
-console.error = (...a) => logs.push({ level: "error", message: a.map(fmt).join(" ") });
+console.error = (...a) => log("error", a);
 console.warn = console.error;
 self.onmessage = async (e) => {
   const { entryUrl } = e.data;
   try {
     const mod = await import(entryUrl);
     if (typeof mod.composeApp !== "function") {
-      self.postMessage({ logs, noEntry: true });
+      self.postMessage({ done: true, noEntry: true });
       return;
     }
     const app = mod.composeApp();
@@ -111,13 +113,17 @@ self.onmessage = async (e) => {
       }
       if (invoked) break;
     }
-    if (!invoked) { self.postMessage({ logs, noEntry: true }); return; }
-    self.postMessage({ logs, value: value === undefined ? undefined : fmt(value) });
+    if (!invoked) { self.postMessage({ done: true, noEntry: true }); return; }
+    self.postMessage({ done: true, value: value === undefined ? undefined : fmt(value) });
   } catch (err) {
-    self.postMessage({ logs, error: String((err && err.stack) || err) });
+    self.postMessage({ done: true, error: String((err && err.stack) || err) });
   }
 };
 `;
+
+// A run keeps at most this many log lines, so one that logs in a loop until its timeout
+// cannot exhaust memory here or in the app.
+const MAX_LOGS = 1000;
 
 function reply(msg: RunReply): void {
   // The app is a real origin; target it precisely. (This document's own origin is
@@ -149,6 +155,12 @@ function run(req: RunRequest): void {
   // module syntax.
   const worker = new Worker(workerUrl);
   let settled = false;
+  const logs: RunReply["logs"] = [];
+  let dropped = 0;
+  const collected = (): RunReply["logs"] =>
+    dropped === 0
+      ? logs
+      : [...logs, { level: "info", message: `… ${dropped} more log line${dropped === 1 ? "" : "s"} not shown` }];
   const cleanup = () => {
     urls.forEach(URL.revokeObjectURL);
     URL.revokeObjectURL(workerUrl);
@@ -159,20 +171,35 @@ function run(req: RunRequest): void {
     settled = true;
     worker.terminate();
     cleanup();
-    reply({ kind: "bynk-result", id: req.id, logs: [], timedOut: true });
+    reply({ kind: "bynk-result", id: req.id, logs: collected(), timedOut: true });
   }, req.timeoutMs);
 
   worker.onmessage = (e: MessageEvent) => {
     if (settled) return;
+    const d = e.data as {
+      log?: { level: string; message: unknown };
+      done?: boolean;
+      value?: string;
+      error?: string;
+      noEntry?: boolean;
+    };
+    if (d.log) {
+      if (logs.length < MAX_LOGS) {
+        logs.push({ level: d.log.level === "error" ? "error" : "info", message: String(d.log.message) });
+      } else {
+        dropped++;
+      }
+      return;
+    }
+    if (!d.done) return;
     settled = true;
     clearTimeout(timer);
     worker.terminate();
     cleanup();
-    const d = e.data as { logs?: RunReply["logs"]; value?: string; error?: string; noEntry?: boolean };
     reply({
       kind: "bynk-result",
       id: req.id,
-      logs: d.logs ?? [],
+      logs: collected(),
       value: d.value,
       error: d.error,
       noEntry: d.noEntry,
@@ -184,7 +211,7 @@ function run(req: RunRequest): void {
     clearTimeout(timer);
     worker.terminate();
     cleanup();
-    reply({ kind: "bynk-result", id: req.id, logs: [], error: e.message || "worker error" });
+    reply({ kind: "bynk-result", id: req.id, logs: collected(), error: e.message || "worker error" });
   };
 
   worker.postMessage({ entryUrl: entry });
