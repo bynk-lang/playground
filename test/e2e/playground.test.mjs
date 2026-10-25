@@ -135,6 +135,16 @@ test("a run that times out still shows what it logged first", { skip }, async ()
   assert.match(await page.text("#output"), /slow/);
 });
 
+test("the UI font is served from the page's own origin", { skip }, async () => {
+  await fresh();
+  const status = await page.eval(`(async () => {
+    await document.fonts.load('600 14px "Instrument Sans"');
+    return [...document.fonts].filter((f) => f.family.includes("Instrument Sans")).map((f) => f.status);
+  })()`);
+  assert.ok(status.includes("loaded"), `Instrument Sans faces: ${status}`);
+  assert.equal(await page.eval(`document.querySelector('link[href*="googleapis"]')`), null);
+});
+
 test("Ctrl+Enter runs from outside the editor", { skip }, async () => {
   await fresh();
   await page.eval(`document.getElementById("share").focus(); document.getElementById("output").textContent = ""`);

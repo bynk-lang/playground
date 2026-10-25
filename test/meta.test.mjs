@@ -27,3 +27,10 @@ test("og.png is a 1200x630 PNG", async () => {
   assert.equal(png.readUInt32BE(16), 1200);
   assert.equal(png.readUInt32BE(20), 630);
 });
+
+test("the page loads nothing from another origin: no third party learns who visits (#35)", () => {
+  const loads = [...html.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+  const fonts = [...html.matchAll(/url\("([^"]+)"\)/g)].map((m) => m[1]);
+  assert.ok(loads.length > 0 && fonts.length > 0);
+  for (const url of [...loads, ...fonts]) assert.match(url, /^\.?\//, `${url} is not on this origin`);
+});
