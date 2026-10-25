@@ -9,7 +9,11 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
-const ROOT = new URL("./dist/", import.meta.url).pathname;
+// BYNK_OUT_DIR / BYNK_APP_PORT / BYNK_SANDBOX_PORT let the browser tests run their own
+// build on their own ports (test/e2e); the defaults are the documented local ones.
+const ROOT = process.env.BYNK_OUT_DIR
+  ? new URL(`${process.env.BYNK_OUT_DIR}/`, `file://${process.cwd()}/`).pathname
+  : new URL("./dist/", import.meta.url).pathname;
 // Same-origin share API (slice 5c): proxy `/api/*` on the app origin to the local
 // `wrangler dev` Worker, mirroring the production Cloudflare route
 // (`playground.bynk-lang.dev/api/* → the snippets Worker`) so the browser never
@@ -65,8 +69,8 @@ function serve(port) {
       res.writeHead(404, { "content-type": "text/plain" });
       res.end("not found");
     }
-  }).listen(port, () => console.log(`serving dist/ on http://localhost:${port}`));
+  }).listen(port, () => console.log(`serving ${ROOT} on http://localhost:${port}`));
 }
 
-serve(8080); // app origin
-serve(8081); // sandbox origin
+serve(Number(process.env.BYNK_APP_PORT ?? 8080)); // app origin
+serve(Number(process.env.BYNK_SANDBOX_PORT ?? 8081)); // sandbox origin

@@ -2,7 +2,8 @@ name: Test
 
 # The playground's checks against one Bynk release: stage that release's browser
 # artefacts (bynk-web-<tag>.tar.gz), then type-check, unit-test, run every
-# gallery example through the release's wasm compiler, and bundle.
+# gallery example through the release's wasm compiler, drive the built app in
+# Chrome, and bundle.
 #
 # Called by ci.yml at the pinned BYNK_VERSION, and by bynk-canary.yml at the
 # release the org canary dispatched, so a Bynk release that breaks the
@@ -69,5 +70,10 @@ jobs:
         run: npx tsc --noEmit
       - name: Unit tests + gallery examples
         run: npm test
+      - name: Browser tests
+        # Drives the built app in the runner's preinstalled Chrome (test/e2e).
+        env:
+          REQUIRE_CHROME: "1"
+        run: npm run test:e2e
       - name: Bundle
         run: npm run build
