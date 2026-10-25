@@ -71,7 +71,9 @@ jobs:
       - name: Unit tests + gallery examples
         run: npm test
       - name: Browser tests
-        timeout-minutes: 5
+        # Includes the Workers tests, which run the real app and sandbox Workers under
+        # `npx wrangler@4.152.0 dev` (the version ci.yml deploys with).
+        timeout-minutes: 10
         # Drives the built app in the runner's preinstalled Chrome (test/e2e).
         env:
           REQUIRE_CHROME: "1"
