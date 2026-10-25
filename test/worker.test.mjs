@@ -22,6 +22,22 @@ test("API calls answer 503 without the binding, so the app falls back to the has
   assert.deepEqual(await res.json(), { error: "share service not available" });
 });
 
+test("the app origin never serves the sandbox's execution document", async () => {
+  for (const path of ["/sandbox", "/sandbox.html", "/sandbox.js", "/sandbox.js.map"]) {
+    const res = await worker.fetch(req(path), { SHARE: tag("share"), ASSETS: tag("assets") });
+    assert.equal(res.status, 404, path);
+  }
+  // Only those files: a path that merely starts with "sandbox" is an ordinary asset.
+  const other = await worker.fetch(req("/sandboxes.png"), { ASSETS: tag("assets") });
+  assert.equal(await other.text(), "assets:/sandboxes.png");
+});
+
+test("the wrangler config runs the Worker first for the sandbox's files", async () => {
+  const jsonc = await readFile(new URL("../wrangler.app.jsonc", import.meta.url), "utf8");
+  const { assets } = JSON.parse(jsonc.replace(/^\s*\/\/.*$/gm, ""));
+  assert.ok(assets.run_worker_first.includes("/sandbox*"));
+});
+
 test("everything else is served from the assets", async () => {
   const res = await worker.fetch(req("/app.js"), { SHARE: tag("share"), ASSETS: tag("assets") });
   assert.equal(await res.text(), "assets:/app.js");
