@@ -11,6 +11,11 @@ export default {
     const url = new URL(request.url);
     if (SERVED.has(url.pathname)) return env.ASSETS.fetch(request);
     // Path and query carry over, so a share link opened on the wrong host still lands.
-    return Response.redirect(new URL(url.pathname + url.search, env.APP_ORIGIN).toString(), 302);
+    // Set them on the app URL rather than resolving the path against it: a path that
+    // starts `//` (or `/\`) would otherwise resolve to another host, an open redirect.
+    const to = new URL(env.APP_ORIGIN);
+    to.pathname = url.pathname;
+    to.search = url.search;
+    return Response.redirect(to.toString(), 302);
   },
 };

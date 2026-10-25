@@ -53,6 +53,10 @@ test("anything else on the sandbox origin is sent to the app, path and query kep
     ["/app.js", "https://app.example/app.js"],
     ["/?s=abc123", "https://app.example/?s=abc123"],
     ["/api/snippets", "https://app.example/api/snippets"],
+    // A path that looks scheme-relative stays on the app origin (no open redirect).
+    ["//evil.example/", "https://app.example//evil.example/"],
+    ["/\\evil.example/", "https://app.example//evil.example/"],
+    ["//evil.example/%2e%2e", "https://app.example//"],
   ]) {
     const res = await sandbox.fetch(sandboxReq(path), sandboxEnv);
     assert.equal(res.status, 302, path);
