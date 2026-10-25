@@ -12,6 +12,8 @@ export interface TourOutcome {
   value?: string;
   /// A thrown error from the program.
   error?: string;
+  /// A later run started before this one finished, so it has no outcome to check.
+  superseded?: boolean;
 }
 
 export interface TourStep {

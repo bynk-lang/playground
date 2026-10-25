@@ -170,6 +170,8 @@ const bynkCompletions = (context: CompletionContext): CompletionResult | null =>
   };
 };
 
+// Every compile takes the next number; only the newest one may show its outcome, so a
+// slow run that finishes (or times out) after a later one never overwrites it (#22).
 let runSeq = 0;
 const pending = new Map<number, (r: RunReply) => void>();
 
@@ -325,6 +327,7 @@ function showUnsupported(diags: Diagnostic[]): void {
 // `remember`: the user asked for this run, so it is worth listing under Recent (not an
 // automatic first run, an example or a tour starter).
 async function compileAndRun(remember = false): Promise<TourOutcome> {
+  const id = ++runSeq;
   setStatus("compiling…", "busy");
   lastReply = undefined;
   lastNote = "Compiling…";
@@ -359,7 +362,6 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
 
   if (remember && !EMBED) rememberRun(source());
   setStatus("running…", "busy");
-  const id = ++runSeq;
   const reply = await new Promise<RunReply>((resolve) => {
     pending.set(id, resolve);
     const iframe = $("sandbox") as HTMLIFrameElement;
@@ -369,6 +371,8 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
       "*",
     );
   });
+  // A later Run has started since: its outcome is the one to show.
+  if (id !== runSeq) return { compiled: true, superseded: true };
   lastReply = reply;
   renderOutput();
   dismissCoach();
@@ -705,11 +709,19 @@ function exitTour(): void {
   $("tour-btn").setAttribute("aria-pressed", "false");
 }
 
+let checkSeq = 0;
+
 async function checkTour(): Promise<void> {
   const step = tourStep();
   if (!step) return;
+  const check = ++checkSeq;
   setTourFeedback("Checking…");
   const outcome = await compileAndRun();
+  if (outcome.superseded) {
+    // A plain Run replaced this check; a newer Check reports for itself.
+    if (check === checkSeq) setTourFeedback("");
+    return;
+  }
   const miss = step.check(outcome);
   if (miss === null) {
     tourDone = true;

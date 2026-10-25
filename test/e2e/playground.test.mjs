@@ -5,6 +5,7 @@
 // found. Run: `npm run test:e2e` (after `npm run fetch:assets`).
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { deflateRawSync } from "node:zlib";
 import { findChrome, launchBrowser, startApp, startFakeShare } from "./harness.mjs";
 
 const chrome = findChrome();
@@ -76,6 +77,41 @@ test("the result tabs: Logs counts lines, arrow keys move between tabs", { skip 
   assert.match(await page.text("#output"), /\/\/ .*\.js/, "Compiled JS lists the emitted files");
   await page.key("Home");
   assert.equal(await page.eval(`document.querySelector("[role=tab][aria-selected=true]").id`), "tab-result");
+});
+
+// A `#…` link to `source` (src/deeplink.ts: base64url of deflate-raw).
+const hashLink = (source) => `${app.url}#${deflateRawSync(Buffer.from(source)).toString("base64url")}`;
+
+// Runs for far longer than the 3 s budget, so it is still going when a later run starts.
+const SLOW = `context demo.slow
+
+consumes bynk { Logger }
+
+service s {
+  on call() -> Effect[Int] given Logger {
+    let _ <- Logger.info("slow")
+    fib(45)
+  }
+}
+
+fn fib(n: Int) -> Int {
+  if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+}
+`;
+
+test("a slow run that ends after a later one never replaces the later result", { skip }, async () => {
+  await fresh();
+  // Via about:blank: from the app URL, a `#…` link alone is only a fragment change.
+  await page.goto("about:blank");
+  await page.goto(hashLink(SLOW));
+  await page.waitFor(`document.getElementById("status").textContent === "running…"`, "the slow run to start");
+  await page.click("#examples");
+  await page.click("#gallery-grid .card");
+  await page.waitFor(`document.getElementById("output").textContent.includes("Hello from Bynk!")`, "the later run's result");
+  // Past the slow run's 3 s budget: its timeout must not take over the pane.
+  await new Promise((r) => setTimeout(r, 3500));
+  assert.match(await page.text("#output"), /⇒ Hello from Bynk!/);
+  assert.equal(await status(), "ran");
 });
 
 test("Ctrl+Enter runs from outside the editor", { skip }, async () => {

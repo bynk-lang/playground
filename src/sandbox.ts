@@ -125,7 +125,13 @@ function reply(msg: RunReply): void {
   parent.postMessage(msg, APP_ORIGIN);
 }
 
+// The run in progress. A new run stops it: the app shows only the newest outcome, so a
+// superseded Worker would only burn CPU until its timeout (#22).
+let stopActive: (() => void) | null = null;
+
 function run(req: RunRequest): void {
+  stopActive?.();
+  stopActive = null;
   let entry: string | null;
   let urls: string[] = [];
   try {
@@ -152,6 +158,15 @@ function run(req: RunRequest): void {
   const cleanup = () => {
     urls.forEach(URL.revokeObjectURL);
     URL.revokeObjectURL(workerUrl);
+    if (stopActive === stop) stopActive = null;
+  };
+  const stop = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    worker.terminate();
+    cleanup();
+    reply({ kind: "bynk-result", id: req.id, logs: [], superseded: true });
   };
 
   const timer = setTimeout(() => {
@@ -187,6 +202,7 @@ function run(req: RunRequest): void {
     reply({ kind: "bynk-result", id: req.id, logs: [], error: e.message || "worker error" });
   };
 
+  stopActive = stop;
   worker.postMessage({ entryUrl: entry });
 }
 
