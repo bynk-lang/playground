@@ -11,6 +11,7 @@
 
 import { pickEntry } from "./entry";
 import type { EntryKind } from "./entry";
+import { LogBuffer } from "./logs";
 import { APP_ORIGIN } from "./shared";
 import type { EmittedFile, RunReply, RunRequest, SandboxConnect } from "./shared";
 
@@ -128,9 +129,6 @@ self.onmessage = async (e) => {
 };
 `;
 
-// A run keeps at most this many log lines, so one that logs in a loop until its timeout
-// cannot exhaust memory here or in the app.
-const MAX_LOGS = 1000;
 
 // The private channel from the app, handed over once in answer to "ready" (#30). Runs
 // arrive and results leave only over it, never as window messages.
@@ -172,12 +170,8 @@ function run(req: RunRequest): void {
   // module syntax.
   const worker = new Worker(workerUrl);
   let settled = false;
-  const logs: RunReply["logs"] = [];
-  let dropped = 0;
-  const collected = (): RunReply["logs"] =>
-    dropped === 0
-      ? logs
-      : [...logs, { level: "info", message: `… ${dropped} more log line${dropped === 1 ? "" : "s"} not shown` }];
+  const logs = new LogBuffer();
+  const collected = () => logs.collected();
   const cleanup = () => {
     urls.forEach(URL.revokeObjectURL);
     URL.revokeObjectURL(workerUrl);
@@ -210,11 +204,7 @@ function run(req: RunRequest): void {
       noEntry?: boolean;
     };
     if (d.log) {
-      if (logs.length < MAX_LOGS) {
-        logs.push({ level: d.log.level === "error" ? "error" : "info", message: String(d.log.message) });
-      } else {
-        dropped++;
-      }
+      logs.push(d.log.level, d.log.message);
       return;
     }
     if (!d.done) return;

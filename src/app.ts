@@ -41,6 +41,11 @@ const EMBED = new URLSearchParams(location.search).get("embed") === "1";
 if (EMBED) document.documentElement.dataset.embed = "1";
 
 const RUN_TIMEOUT_MS = 3000;
+
+// Apple devices write the Run shortcut ⌘↵ (#37); Ctrl+Enter works there too, but ⌘ is what
+// their users expect. Either platform signal will do: both say so on a real Mac.
+const IS_APPLE = [(navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform, navigator.platform]
+  .some((p) => p && /mac|iphone|ipad/i.test(p));
 const PLATFORM_LOCK = new Set(["bynk.target.vendor_required", "bynk.target.browser_bundle_only"]);
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -1009,6 +1014,10 @@ async function main(): Promise<void> {
     const link = $("open-full") as HTMLAnchorElement;
     link.href = u.toString();
     link.hidden = false;
+  }
+  if (IS_APPLE) {
+    $("run-key").textContent = "⌘↵";
+    $("run").title = "Compile & run (⌘↵)";
   }
   $("run").addEventListener("click", () => void compileAndRun(true));
   $("share").addEventListener("click", () => void share());

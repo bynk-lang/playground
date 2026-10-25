@@ -166,6 +166,20 @@ test("when the code runner can't load, the page says so and can try again", { sk
   }
 });
 
+test("the Run button shows the shortcut the platform uses", { skip }, async () => {
+  await fresh();
+  assert.equal(await page.text("#run-key"), "Ctrl+Enter");
+  const { userAgent } = await page.send("Browser.getVersion");
+  await page.send("Emulation.setUserAgentOverride", { userAgent, platform: "MacIntel" });
+  try {
+    await page.goto(app.url);
+    assert.equal(await page.text("#run-key"), "⌘↵");
+  } finally {
+    await page.send("Emulation.setUserAgentOverride", { userAgent, platform: "Linux x86_64" });
+  }
+});
+
+
 test("a document that takes over the code runner's frame gets no runs and can't answer for them", { skip }, async () => {
   await fresh();
   // What a page framing the playground could do: navigate the inner sandbox frame to a
@@ -182,6 +196,7 @@ test("a document that takes over the code runner's frame gets no runs and can't 
   assert.equal(await status(), "code runner lost", "the run is not sent to the new document");
   assert.match(await page.text("#output"), /Reload the page/);
 });
+
 
 test("Ctrl+Enter runs from outside the editor", { skip }, async () => {
   await fresh();
