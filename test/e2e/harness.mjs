@@ -62,6 +62,8 @@ export async function startFakeShare() {
   return {
     port: server.address().port,
     state,
+    // The snippets held, by id, so a test can open `?s=<id>` on one it seeded.
+    store,
     // serve.mjs keeps its proxy connection alive, which would hold the process open.
     close: () => (server.closeAllConnections(), server.close()),
   };

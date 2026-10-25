@@ -1,0 +1,5 @@
+suite ids {
+	case "an id is the uuid's first twelve hex digits, without the hyphen" {
+		expect idFromUuid("0123abcd-4567-4890-abcd-0123456789ab") == "0123abcd4567"
+	}
+}

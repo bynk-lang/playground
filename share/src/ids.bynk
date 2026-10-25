@@ -14,6 +14,16 @@ boundary, before any handler runs (64 KiB is ample for a playground program).
 type Source = String where MinLength(1) && MaxLength(65536)
 
 ---
+A snippet id from a random uuid: its first twelve hex digits, skipping the hyphen
+after the eighth, so 48 random bits. A collision among a playground's live snippets
+is then vanishingly unlikely, and `POST` refuses one rather than overwrite (#24).
+Ids made before this were eight digits; they still fit `SnippetId` and still read.
+---
+fn idFromUuid(uuid: String) -> String {
+	"\(uuid.slice(0, 8))\(uuid.slice(9, 13))"
+}
+
+---
 The KV key for a snippet id. Namespacing keeps shared snippets separate from
 anything else stored in the same namespace.
 ---
