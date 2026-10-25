@@ -135,6 +135,37 @@ test("a run that times out still shows what it logged first", { skip }, async ()
   assert.match(await page.text("#output"), /slow/);
 });
 
+test("when the code runner can't load, the page says so and can try again", { skip }, async () => {
+  // Sandboxed iframes run in their own process, out of reach of this page's network
+  // blocking, so simulate the failure itself: the runner's "ready" never reaches the app.
+  const { identifier } = await page.send("Page.addScriptToEvaluateOnNewDocument", {
+    source: `window.__dropReady = true;
+      const add = window.addEventListener;
+      window.addEventListener = function (type, fn, opts) {
+        if (type !== "message") return add.call(this, type, fn, opts);
+        return add.call(this, type, (e) => {
+          if (window.__dropReady && e.data && e.data.kind === "bynk-sandbox-ready") return;
+          fn(e);
+        }, opts);
+      };`,
+  });
+  try {
+    await page.goto(app.url);
+    await page.eval("localStorage.clear()");
+    await page.waitFor(`document.getElementById("status").textContent === "compiler ready"`, "the compiler");
+    await page.click("#run");
+    assert.match(await page.text("#output"), /still loading/, "Run before the runner is ready says so");
+    await page.waitFor(`document.getElementById("status").textContent === "code runner not loaded"`, "the load timeout", 15000);
+    assert.match(await page.text("#output"), /hasn't loaded.*blocking it/);
+    await page.eval("window.__dropReady = false");
+    await page.click("#sandbox-retry");
+    await settled();
+    assert.match(await page.text("#output"), /⇒ Hello from Bynk!/, "the opening program runs once the runner loads");
+  } finally {
+    await page.send("Page.removeScriptToEvaluateOnNewDocument", { identifier });
+  }
+});
+
 test("the UI font is served from the page's own origin", { skip }, async () => {
   await fresh();
   const status = await page.eval(`(async () => {
@@ -144,6 +175,7 @@ test("the UI font is served from the page's own origin", { skip }, async () => {
   assert.ok(status.includes("loaded"), `Instrument Sans faces: ${status}`);
   assert.equal(await page.eval(`document.querySelector('link[href*="googleapis"]')`), null);
 });
+
 
 test("Ctrl+Enter runs from outside the editor", { skip }, async () => {
   await fresh();

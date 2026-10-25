@@ -61,6 +61,20 @@ test("the sandbox origin serves only the execution document and sends the rest t
   assert.equal(new URL(html.headers.get("location"), workers.sandboxOrigin).href, `${workers.sandboxOrigin}/sandbox`);
 });
 
+test("content-hashed files are cached for a year; the page is always revalidated", { skip }, async () => {
+  const html = await (await fetch(workers.appOrigin + "/")).text();
+  const files = [...html.matchAll(/"\.\/(static\/[^"]+)"/g)].map((m) => m[1]);
+  assert.ok(files.some((f) => /^static\/app-\w+\.js$/.test(f)), `the page loads a hashed app bundle: ${files}`);
+  for (const f of files) {
+    const res = await fetch(`${workers.appOrigin}/${f}`);
+    assert.equal(res.status, 200, f);
+    assert.match(res.headers.get("cache-control") ?? "", /max-age=31536000.*immutable/, f);
+  }
+  const page = await fetch(workers.appOrigin + "/");
+  assert.doesNotMatch(page.headers.get("cache-control") ?? "", /immutable/, "the HTML is never cached for good");
+  assert.equal((await fetch(workers.appOrigin + "/_headers")).status, 404, "the headers file itself is not served");
+});
+
 test("Share makes a short link through the app Worker and the SHARE binding", { skip }, async () => {
   await page.goto(workers.appOrigin);
   await settled();
