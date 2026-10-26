@@ -5,7 +5,8 @@
 //
 // The compiler will say which is which (bynk-lang/bynk#2425: each emitted file carries
 // `kind`). Until a release does, the kind is read from the layout bynkc emits: the runtime
-// and the `bynk` namespace (reserved, so no program's context can live there) are support,
+// (`runtime.js`, or `__bynk_runtime/` since 0.405) and the `bynk` namespace (reserved, so no
+// program's context can live there) are support,
 // and `compose.js` is wiring when it is the composition root. A capability-free program
 // has no composition root, so a context named `compose` is then the program's own module.
 // Pure, so test/jsview.test.mjs runs it under plain `node --test`.
@@ -16,7 +17,7 @@ const SUPPORT = new Set(["runtime.js", "bynk.js", "bynk-browser.js"]);
 
 export function kindOf(file: EmittedFile): FileKind {
   if (file.kind) return file.kind;
-  if (SUPPORT.has(file.path) || file.path.startsWith("bynk/")) return "support";
+  if (SUPPORT.has(file.path) || file.path.startsWith("bynk/") || file.path.startsWith("__bynk_runtime/")) return "support";
   if (file.path === "compose.js" && /export function composeApp\(/.test(file.contents)) return "wiring";
   return "user";
 }
