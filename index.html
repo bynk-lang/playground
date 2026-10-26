@@ -155,7 +155,11 @@
       .cm-gutters { background: var(--surface-panel) !important; color: var(--ink-muted) !important; border: 0 !important; }
       .cm-activeLine { background: color-mix(in srgb, var(--ink) 6%, transparent) !important; }
       .cm-activeLineGutter { background: transparent !important; color: var(--ink) !important; }
-      .cm-cursor { border-left-color: var(--ink) !important; }
+      /* The insertion point. The editor is not told it is dark, so CodeMirror's base theme paints
+         the native caret black on the dark panel (`&light .cm-content { caret-color: black }`).
+         Amber, as in the VS Code themes: 9:1 on the dark panel, 7:1 on the light one. */
+      .cm-editor .cm-content { caret-color: var(--brand-text) !important; }
+      .cm-cursor { border-left-color: var(--brand-text) !important; }
       .cm-selectionBackground, .cm-focused .cm-selectionBackground { background: color-mix(in srgb, var(--accent) 28%, transparent) !important; }
       .cm-tooltip { background: var(--surface-raised) !important; color: var(--ink) !important;
         border: 1px solid var(--line-strong) !important; border-radius: var(--radius-md); box-shadow: var(--shadow-pop); }
