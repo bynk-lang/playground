@@ -22,7 +22,18 @@ before(async () => {
   browser = await launchBrowser(chrome);
   page = browser.page;
   await page.setViewport(1512, 860);
+  // Record every Content-Security-Policy violation, on every page this file loads, where
+  // the last test can read them: sessionStorage outlives the navigations in between (#34).
+  await page.send("Page.addScriptToEvaluateOnNewDocument", { source: RECORD_CSP_VIOLATIONS });
 });
+
+const RECORD_CSP_VIOLATIONS = `addEventListener("securitypolicyviolation", (e) => {
+  try {
+    const seen = JSON.parse(sessionStorage.getItem("csp-violations") || "[]");
+    seen.push(e.violatedDirective + " " + e.blockedURI + " on " + location.pathname + location.search);
+    sessionStorage.setItem("csp-violations", JSON.stringify(seen));
+  } catch {}
+});`;
 
 after(async () => {
   // Stop everything even if one teardown step throws, or the process never exits.
@@ -206,6 +217,10 @@ test("a document that takes over the code runner's frame gets no runs and can't 
   assert.doesNotMatch(await page.text("#output"), /spoofed/, "a made-up result is never shown");
   assert.equal(await status(), "code runner lost", "the run is not sent to the new document");
   assert.match(await page.text("#output"), /Reload the page/);
+  // The page's policy (#34) refuses the navigation itself (frame-src names only the sandbox
+  // origin); that refusal is this test's, so take it off the record the last test checks.
+  assert.equal(await page.eval(`JSON.parse(sessionStorage.getItem("csp-violations") || "[]").some((v) => v.startsWith("frame-src"))`), true);
+  await page.eval(`sessionStorage.setItem("csp-violations", JSON.stringify(JSON.parse(sessionStorage.getItem("csp-violations") || "[]").filter((v) => !v.startsWith("frame-src"))))`);
 });
 
 
@@ -435,4 +450,14 @@ test("on a phone the panes stack and nothing scrolls sideways", { skip }, async 
   } finally {
     await page.setViewport(1512, 860);
   }
+});
+
+// Last, so it covers every flow above: the page did everything under its policy (#34).
+test("nothing the playground does is refused by its Content-Security-Policy", { skip }, async () => {
+  await page.goto(app.url);
+  assert.deepEqual(await page.eval(`JSON.parse(sessionStorage.getItem("csp-violations") || "[]")`), []);
+  // And the policy is in force: an injected inline script is refused.
+  await page.eval(`document.body.append(Object.assign(document.createElement("script"), { textContent: "window.__ran = true" }))`);
+  await page.waitFor(`JSON.parse(sessionStorage.getItem("csp-violations") || "[]").some((v) => v.startsWith("script-src"))`, "the refusal");
+  assert.equal(await page.eval("window.__ran === true"), false);
 });

@@ -89,6 +89,19 @@ test("the execution document runs programs under its no-network policy", { skip 
 });
 
 
+test("the page carries its own policy, and the sandbox's document only the sandbox's", { skip }, async () => {
+  const page = await fetch(workers.appOrigin + "/");
+  const csp = page.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, new RegExp(`frame-src ${workers.sandboxOrigin}`));
+  assert.equal(page.headers.get("x-content-type-options"), "nosniff");
+  // A second policy on the execution document would narrow its own (no blob: modules).
+  const doc = await fetch(workers.sandboxOrigin + "/sandbox");
+  const docCsp = doc.headers.get("content-security-policy") ?? "";
+  assert.match(docCsp, /connect-src 'none'/);
+  assert.doesNotMatch(docCsp, /frame-src/, "the app's policy is not applied to the sandbox's document");
+});
+
 test("Share makes a short link through the app Worker and the SHARE binding", { skip }, async () => {
   await page.goto(workers.appOrigin);
   await settled();
