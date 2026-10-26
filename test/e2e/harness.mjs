@@ -93,7 +93,24 @@ export async function startApp(sharePort) {
   return { url: `http://localhost:${appPort}/`, stop: () => server.kill() };
 }
 
+/// `launchBrowserOnce`, tried up to three times when Chrome comes up but never exposes its
+/// DevTools endpoint. That happened once in CI on a loaded runner (after a 30s wait, with
+/// nothing on stderr), so a fresh process on a fresh port gets another go; any other failure
+/// is real and throws at once.
 export async function launchBrowser(chrome) {
+  let last;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await launchBrowserOnce(chrome);
+    } catch (e) {
+      last = e;
+      if (!/did not expose DevTools|DevTools WebSocket failed to open/.test(String(e))) throw e;
+    }
+  }
+  throw new Error(`${last.message}\n(after 3 launch attempts)`);
+}
+
+async function launchBrowserOnce(chrome) {
   const profile = await mkdtemp(join(tmpdir(), "bynk-e2e-"));
   const port = await freePort();
   const proc = spawn(
@@ -126,6 +143,9 @@ export async function launchBrowser(chrome) {
   };
   let stderr = "";
   proc.stderr.on("data", (d) => (stderr = (stderr + d).slice(-2000)));
+  // Whether Chrome died, so a failure says "exited" rather than leaving it to be guessed.
+  let exited = "was still running";
+  proc.on("exit", (code, signal) => (exited = `exited (code ${code}, signal ${signal})`));
   // If anything below throws, Chrome must still be killed or the test process never exits.
   let ws;
   try {
@@ -139,7 +159,7 @@ export async function launchBrowser(chrome) {
       }
     }
     const pageTarget = targets?.find((t) => t.type === "page");
-    if (!pageTarget) throw new Error(`Chrome did not expose DevTools on port ${port} within 30s. stderr:\n${stderr}`);
+    if (!pageTarget) throw new Error(`Chrome did not expose DevTools on port ${port} within 30s; the process ${exited}. stderr:\n${stderr}`);
     ws = new WebSocket(pageTarget.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
       ws.onopen = resolve;
