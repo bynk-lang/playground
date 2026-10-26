@@ -23,10 +23,10 @@ export const EXAMPLES: Example[] = [
 consumes bynk { Logger }
 
 service greet {
-  on call() -> Effect[String] given Logger {
-    let _ <- Logger.info("Hello from Bynk!")
-    "Hello from Bynk!"
-  }
+	on call() -> Effect[String] given Logger {
+		let _ <- Logger.info("Hello from Bynk!")
+		"Hello from Bynk!"
+	}
 }
 `,
   },
@@ -39,11 +39,11 @@ service greet {
 consumes bynk { Random, Logger }
 
 service roll {
-  on call() -> Effect[Int] given Random, Logger {
-    let _ <- Logger.info("Rolling a d6...")
-    let n <- Random.int(1, 7)
-    n
-  }
+	on call() -> Effect[Int] given Random, Logger {
+		let _ <- Logger.info("Rolling a d6...")
+		let n <- Random.int(1, 7)
+		n
+	}
 }
 `,
   },
@@ -55,13 +55,19 @@ service roll {
 
 consumes bynk { Logger }
 
-type Point = { x: Int, y: Int }
+type Point = {
+	x: Int,
+	y: Int,
+}
 
 service make {
-  on call() -> Effect[Point] given Logger {
-    let _ <- Logger.info("Building a point")
-    Point { x: 3, y: 4 }
-  }
+	on call() -> Effect[Point] given Logger {
+		let _ <- Logger.info("Building a point")
+		Point {
+			x: 3,
+			y: 4,
+		}
+	}
 }
 `,
   },
@@ -76,14 +82,14 @@ consumes bynk { Logger }
 type Light = enum { Red, Green, Yellow }
 
 service next {
-  on call() -> Effect[String] given Logger {
-    let _ <- Logger.info("The light is green")
-    match Green {
-      Red => "stop",
-      Green => "go",
-      Yellow => "slow down",
-    }
-  }
+	on call() -> Effect[String] given Logger {
+		let _ <- Logger.info("The light is green")
+		match Green {
+			Red => "stop",
+			Green => "go",
+			Yellow => "slow down",
+		}
+	}
 }
 `,
   },
@@ -98,13 +104,13 @@ consumes bynk { Logger }
 type Slug = String where Matches("[a-z]+")
 
 service check {
-  on call() -> Effect[Bool] given Logger {
-    let _ <- Logger.info("Is \\"hello\\" a valid slug?")
-    match Slug.of("hello") {
-      Ok(_) => true,
-      Err(_) => false,
-    }
-  }
+	on call() -> Effect[Bool] given Logger {
+		let _ <- Logger.info("Is \\"hello\\" a valid slug?")
+		match Slug.of("hello") {
+			Ok(_) => true,
+			Err(_) => false,
+		}
+	}
 }
 `,
   },
@@ -115,13 +121,13 @@ service check {
     source: `context demo.functions
 
 fn grade(score: Int) -> String {
-  if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
+	if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
 }
 
 service run {
-  on call() -> Effect[String] {
-    grade(72)
-  }
+	on call() -> Effect[String] {
+		grade(72)
+	}
 }
 `,
   },
@@ -132,20 +138,20 @@ service run {
     source: `context demo.shapes
 
 type Shape =
-  | Circle(r: Int)
-  | Rect(w: Int, h: Int)
+	| Circle(r: Int)
+	| Rect(w: Int, h: Int)
 
 fn area(s: Shape) -> Int {
-  match s {
-    Circle(r) => 3 * r * r,
-    Rect(w, h) => w * h,
-  }
+	match s {
+		Circle(r) => 3 * r * r,
+		Rect(w, h) => w * h,
+	}
 }
 
 service run {
-  on call() -> Effect[Int] {
-    area(Rect(3, 4))
-  }
+	on call() -> Effect[Int] {
+		area(Rect(3, 4))
+	}
 }
 `,
   },
@@ -156,13 +162,13 @@ service run {
     source: `context demo.option
 
 service run {
-  on call() -> Effect[String] {
-    let xs = [3, 8, 12]
-    match xs.first() {
-      Some(n) => "first is \\(n)",
-      None => "empty",
-    }
-  }
+	on call() -> Effect[String] {
+		let xs = [3, 8, 12]
+		match xs.first() {
+			Some(n) => "first is \\(n)",
+			None => "empty",
+		}
+	}
 }
 `,
   },
@@ -173,19 +179,19 @@ service run {
     source: `context demo.result
 
 fn parseAge(s: String) -> Result[Int, String] {
-  match Int.parse(s) {
-    None => Err("not a number"),
-    Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
-  }
+	match Int.parse(s) {
+		None => Err("not a number"),
+		Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
+	}
 }
 
 service run {
-  on call() -> Effect[String] {
-    match parseAge("-5") {
-      Ok(n) => "age \\(n)",
-      Err(e) => "problem: \\(e)",
-    }
-  }
+	on call() -> Effect[String] {
+		match parseAge("-5") {
+			Ok(n) => "age \\(n)",
+			Err(e) => "problem: \\(e)",
+		}
+	}
 }
 `,
   },
@@ -196,24 +202,24 @@ service run {
     source: `context demo.question
 
 fn parseAge(s: String) -> Result[Int, String] {
-  match Int.parse(s) {
-    None => Err("not a number"),
-    Some(n) => Ok(n),
-  }
+	match Int.parse(s) {
+		None => Err("not a number"),
+		Some(n) => Ok(n),
+	}
 }
 
 fn nextAge(s: String) -> Result[Int, String] {
-  let n = parseAge(s)?
-  Ok(n + 1)
+	let n = parseAge(s)?
+	Ok(n + 1)
 }
 
 service run {
-  on call() -> Effect[Int] {
-    match nextAge("41") {
-      Ok(n) => n,
-      Err(_) => 0,
-    }
-  }
+	on call() -> Effect[Int] {
+		match nextAge("41") {
+			Ok(n) => n,
+			Err(_) => 0,
+		}
+	}
 }
 `,
   },
@@ -224,10 +230,10 @@ service run {
     source: `context demo.lists
 
 service run {
-  on call() -> Effect[Int] {
-    let xs = [1, 2, 3, 4]
-    xs.fold(0, (acc, x) => acc + x)
-  }
+	on call() -> Effect[Int] {
+		let xs = [1, 2, 3, 4]
+		xs.fold(0, (acc, x) => acc + x)
+	}
 }
 `,
   },
@@ -237,12 +243,18 @@ service run {
     blurb: "A service that asks for nothing: no consumes, no given.",
     source: `context demo.plain
 
-type Point = { x: Int, y: Int }
+type Point = {
+	x: Int,
+	y: Int,
+}
 
 service make {
-  on call() -> Effect[Point] {
-    Point { x: 3, y: 4 }
-  }
+	on call() -> Effect[Point] {
+		Point {
+			x: 3,
+			y: 4,
+		}
+	}
 }
 `,
   },
