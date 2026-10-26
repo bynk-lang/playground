@@ -161,6 +161,28 @@ test("the insertion point is the amber brand-text colour and legible in both the
   }
 });
 
+test("the bento mark sits beside the wordmark and does not rename the page", { skip }, async () => {
+  await fresh();
+  assert.equal(await page.visible(".wordmark svg.mark"), true);
+  assert.equal(await page.eval(`document.querySelector(".wordmark svg.mark").getAttribute("aria-hidden")`), "true", "decorative");
+  assert.equal(await page.eval(`document.querySelector(".wordmark").textContent.replace(/\\s+/g, "")`), "Bynk.");
+  const [markRight, textLeft] = await page.eval(`(() => {
+    const mark = document.querySelector(".wordmark svg.mark").getBoundingClientRect();
+    return [mark.right, document.querySelector(".wordmark .word").getBoundingClientRect().left];
+  })()`);
+  assert.ok(markRight <= textLeft + 1, "the mark is to the left of the text");
+  // The full stop belongs to the word: no flex gap between "Bynk" and ".".
+  const gap = await page.eval(`(() => {
+    const word = document.querySelector(".wordmark .word");
+    const dot = word.querySelector(".dot").getBoundingClientRect();
+    const range = document.createRange();
+    range.setStart(word.firstChild, 0);
+    range.setEnd(word.firstChild, 4);
+    return dot.left - range.getBoundingClientRect().right;
+  })()`);
+  assert.ok(gap < 3, `the full stop hugs "Bynk" (gap ${gap}px)`);
+});
+
 test("a broken program shows the error and does not run", { skip }, async () => {
   await fresh();
   await page.type("zzz ");
