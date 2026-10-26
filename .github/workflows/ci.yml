@@ -93,7 +93,8 @@ jobs:
             echo "::notice::share/bynk.deploy.lock is not committed, so the share service is only planned. Run bynk deploy once locally in share/ and commit the lock it writes. See README.md §Share service."
             echo "live=false" >> "$GITHUB_OUTPUT"
           fi
-      # The API token reaches only this step (the action sets it for `bynk deploy`).
+      # The API token reaches only this step (the action sets it for `bynk deploy`) and the
+      # workers.dev step after it.
       - name: Deploy the share service
         id: deploy
         if: steps.mode.outputs.live == 'true'
@@ -103,6 +104,27 @@ jobs:
           working-directory: share
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # #25: the share service is reached only through the app Worker's service binding,
+      # whose rate limit a public address would bypass. bynk deploy's wrangler.toml sets
+      # neither `routes` nor `workers_dev` (and bynk.toml has no key for it), so Wrangler
+      # turns the workers.dev route and preview URLs back on at every deploy: turn both
+      # off again, even after a deploy that failed partway, and fail if they stay on.
+      - name: Turn off the share service's workers.dev route
+        if: ${{ !cancelled() && steps.mode.outputs.live == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKER: snippets
+        run: |
+          url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$WORKER/subdomain"
+          api() { curl -sS --retry 3 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$@" "$url"; }
+          api -X POST -H "Content-Type: application/json" --data '{"enabled":false,"previews_enabled":false}' >/dev/null
+          state=$(api)
+          echo "$state" | jq -c '{success, result}'
+          if [ "$(echo "$state" | jq '.success and .result.enabled == false and .result.previews_enabled == false')" != true ]; then
+            echo "::error::The $WORKER Worker's workers.dev route or preview URLs are still on, so share requests can skip the app's rate limit (#25)."
+            exit 1
+          fi
       - name: Plan the share service
         if: steps.mode.outputs.live != 'true'
         uses: bynk-lang/bynk-deploy@5b76fe1c04f3782757020e05db15fed1e4026399 # v2
