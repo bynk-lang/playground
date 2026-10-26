@@ -100,6 +100,11 @@ test("the result tabs: Logs counts lines, arrow keys move between tabs", { skip 
   assert.equal(await page.eval(`document.querySelector("[role=tab][aria-selected=true]").id`), "tab-result");
 });
 
+// The runtime's file header in the Compiled JS view: one `runtime.js` up to Bynk 0.404, the
+// `__bynk_runtime/*.js` files from 0.405. Matching the `// ` header, not the bare name,
+// since the program's own imports mention the path.
+const RUNTIME_HEADER = /\/\/ (?:runtime\.js|__bynk_runtime\/)/;
+
 test("Compiled JS leads with the program's own code; the runtime is a click away and stays open", { skip }, async () => {
   await fresh();
   await page.click("#tab-js");
@@ -109,13 +114,13 @@ test("Compiled JS leads with the program's own code; the runtime is a click away
   assert.match(out, /\/\/ hello\/world\.js/);
   assert.match(out, /Runtime and bindings · \d+ files, \d+ lines/);
   assert.match(out, /Composition root · 1 file, \d+ lines/);
-  assert.doesNotMatch(out, /\/\/ runtime\.js/, "the runtime is collapsed");
+  assert.doesNotMatch(out, RUNTIME_HEADER, "the runtime is collapsed");
   assert.ok(out.split("\n").length < 40, `about 15 lines by default, got ${out.split("\n").length}`);
   await page.click(`.out-section[data-kind=support] > summary`);
-  assert.match(await shown(), /\/\/ runtime\.js/);
+  assert.match(await shown(), RUNTIME_HEADER);
   await page.click("#run");
   await settled();
-  assert.match(await shown(), /\/\/ runtime\.js/, "an opened section stays open across runs");
+  assert.match(await shown(), RUNTIME_HEADER, "an opened section stays open across runs");
 });
 
 // A `#…` link to `source` (src/deeplink.ts: base64url of deflate-raw).
