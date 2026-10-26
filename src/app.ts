@@ -3,6 +3,7 @@
 // dispatches a successful compile to the cross-origin **sandbox** iframe to run.
 
 import { Compartment, EditorState } from "@codemirror/state";
+import { indentUnit } from "@codemirror/language";
 import {
   EditorView,
   keymap,
@@ -34,6 +35,10 @@ import init, { bynk_compile, bynk_analyze, bynk_hover, bynk_complete, bynk_forma
 // The default program when there is no shared snippet in the URL: the first gallery
 // example (Hello, world).
 const DEFAULT_SOURCE = EXAMPLES[0].source;
+
+// `bynk fmt` indents with tabs, so a person can choose the width that suits them and the file
+// stays the same. The editor shows a tab as this many columns, and indents new lines with tabs.
+const TAB_SIZE = 2;
 
 // `?embed=1`: the compact view for an <iframe> in someone else's page (see the share
 // sheet). It runs the snippet but never reads or writes this browser's draft, recents,
@@ -997,6 +1002,8 @@ function makeEditor(doc: string): void {
       doc,
       extensions: [
         lineNumbers(),
+        EditorState.tabSize.of(TAB_SIZE),
+        indentUnit.of("\t"),
         highlightActiveLine(),
         history(),
         keymap.of([

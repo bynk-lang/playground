@@ -38,8 +38,6 @@ export function nextIncomplete(ids: string[], done: string[]): number {
   return i === -1 ? 0 : i;
 }
 
-const prelude = (ctx: string) => `context ${ctx}\n\nconsumes bynk { Logger }\n`;
-
 export const TOUR: TourStep[] = [
   {
     id: "run",
@@ -47,20 +45,26 @@ export const TOUR: TourStep[] = [
     prose:
       "A Bynk program is a `context` holding `service`s. This one logs a line and returns a `String`. The result appears on the right as `⇒`.",
     task: "Change the returned string so it greets you instead of the world, then press Check.",
-    starter: `${prelude("tour.run")}
+    starter: `context tour.run
+
+consumes bynk { Logger }
+
 service greet {
-  on call() -> Effect[String] given Logger {
-    let _ <- Logger.info("Greeting someone")
-    "Hello, world"
-  }
+	on call() -> Effect[String] given Logger {
+		let _ <- Logger.info("Greeting someone")
+		"Hello, world"
+	}
 }
 `,
-    solution: `${prelude("tour.run")}
+    solution: `context tour.run
+
+consumes bynk { Logger }
+
 service greet {
-  on call() -> Effect[String] given Logger {
-    let _ <- Logger.info("Greeting someone")
-    "Hello, Ada"
-  }
+	on call() -> Effect[String] given Logger {
+		let _ <- Logger.info("Greeting someone")
+		"Hello, Ada"
+	}
 }
 `,
     hint: "Keep the quotes around the string.",
@@ -77,13 +81,16 @@ service greet {
     prose:
       "A service can only do what it declares. `consumes bynk { … }` names the capabilities a context may use, and `given` lists the ones a handler needs. Randomness is a capability too.",
     task: "The program uses `Random` without declaring it. Declare it in both places.",
-    starter: `${prelude("tour.dice")}
+    starter: `context tour.dice
+
+consumes bynk { Logger }
+
 service roll {
-  on call() -> Effect[Int] given Logger {
-    let _ <- Logger.info("Rolling a d6...")
-    let n <- Random.int(1, 7)
-    n
-  }
+	on call() -> Effect[Int] given Logger {
+		let _ <- Logger.info("Rolling a d6...")
+		let n <- Random.int(1, 7)
+		n
+	}
 }
 `,
     solution: `context tour.dice
@@ -91,11 +98,11 @@ service roll {
 consumes bynk { Random, Logger }
 
 service roll {
-  on call() -> Effect[Int] given Random, Logger {
-    let _ <- Logger.info("Rolling a d6...")
-    let n <- Random.int(1, 7)
-    n
-  }
+	on call() -> Effect[Int] given Random, Logger {
+		let _ <- Logger.info("Rolling a d6...")
+		let n <- Random.int(1, 7)
+		n
+	}
 }
 `,
     hint: "The error names the unknown capability: add it to `consumes` and to `given`.",
@@ -112,22 +119,34 @@ service roll {
     task: "Make the point `x: 10` and `y: 20`.",
     starter: `context tour.records
 
-type Point = { x: Int, y: Int }
+type Point = {
+	x: Int,
+	y: Int,
+}
 
 service make {
-  on call() -> Effect[Point] {
-    Point { x: 3, y: 4 }
-  }
+	on call() -> Effect[Point] {
+		Point {
+			x: 3,
+			y: 4,
+		}
+	}
 }
 `,
     solution: `context tour.records
 
-type Point = { x: Int, y: Int }
+type Point = {
+	x: Int,
+	y: Int,
+}
 
 service make {
-  on call() -> Effect[Point] {
-    Point { x: 10, y: 20 }
-  }
+	on call() -> Effect[Point] {
+		Point {
+			x: 10,
+			y: 20,
+		}
+	}
 }
 `,
     hint: "Both fields are required.",
@@ -152,12 +171,12 @@ service make {
 type Light = enum { Red, Green, Yellow }
 
 service next {
-  on call() -> Effect[String] {
-    match Yellow {
-      Red => "stop",
-      Green => "go",
-    }
-  }
+	on call() -> Effect[String] {
+		match Yellow {
+			Red => "stop",
+			Green => "go",
+		}
+	}
 }
 `,
     solution: `context tour.lights
@@ -165,13 +184,13 @@ service next {
 type Light = enum { Red, Green, Yellow }
 
 service next {
-  on call() -> Effect[String] {
-    match Yellow {
-      Red => "stop",
-      Green => "go",
-      Yellow => "slow down",
-    }
-  }
+	on call() -> Effect[String] {
+		match Yellow {
+			Red => "stop",
+			Green => "go",
+			Yellow => "slow down",
+		}
+	}
 }
 `,
     hint: "The error says which variant is not covered. Add an arm for it.",
@@ -188,12 +207,12 @@ service next {
 type Slug = String where Matches("[a-z]+")
 
 service check {
-  on call() -> Effect[Bool] {
-    match Slug.of("Hello World") {
-      Ok(_) => true,
-      Err(_) => false,
-    }
-  }
+	on call() -> Effect[Bool] {
+		match Slug.of("Hello World") {
+			Ok(_) => true,
+			Err(_) => false,
+		}
+	}
 }
 `,
     solution: `context tour.slug
@@ -201,12 +220,12 @@ service check {
 type Slug = String where Matches("[a-z]+")
 
 service check {
-  on call() -> Effect[Bool] {
-    match Slug.of("hello") {
-      Ok(_) => true,
-      Err(_) => false,
-    }
-  }
+	on call() -> Effect[Bool] {
+		match Slug.of("hello") {
+			Ok(_) => true,
+			Err(_) => false,
+		}
+	}
 }
 `,
     hint: "Only the input string needs to change.",
@@ -221,25 +240,25 @@ service check {
     starter: `context tour.functions
 
 fn grade(score: Int) -> String {
-  "fail"
+	"fail"
 }
 
 service run {
-  on call() -> Effect[String] {
-    grade(72)
-  }
+	on call() -> Effect[String] {
+		grade(72)
+	}
 }
 `,
     solution: `context tour.functions
 
 fn grade(score: Int) -> String {
-  if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
+	if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
 }
 
 service run {
-  on call() -> Effect[String] {
-    grade(72)
-  }
+	on call() -> Effect[String] {
+		grade(72)
+	}
 }
 `,
     hint: "`if cond { a } else { b }` needs both branches.",
@@ -254,24 +273,24 @@ service run {
     starter: `context tour.option
 
 service run {
-  on call() -> Effect[String] {
-    let xs = [3, 8, 12]
-    match xs.first() {
-      Some(n) => "first is \\(n)",
-    }
-  }
+	on call() -> Effect[String] {
+		let xs = [3, 8, 12]
+		match xs.first() {
+			Some(n) => "first is \\(n)",
+		}
+	}
 }
 `,
     solution: `context tour.option
 
 service run {
-  on call() -> Effect[String] {
-    let xs = [3, 8, 12]
-    match xs.first() {
-      Some(n) => "first is \\(n)",
-      None => "empty",
-    }
-  }
+	on call() -> Effect[String] {
+		let xs = [3, 8, 12]
+		match xs.first() {
+			Some(n) => "first is \\(n)",
+			None => "empty",
+		}
+	}
 }
 `,
     hint: "The error names the case that is not covered.",
@@ -286,36 +305,36 @@ service run {
     starter: `context tour.result
 
 fn parseAge(s: String) -> Result[Int, String] {
-  match Int.parse(s) {
-    None => Err("not a number"),
-    Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
-  }
+	match Int.parse(s) {
+		None => Err("not a number"),
+		Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
+	}
 }
 
 service run {
-  on call() -> Effect[String] {
-    match parseAge("-5") {
-      Ok(n) => "age \\(n)",
-    }
-  }
+	on call() -> Effect[String] {
+		match parseAge("-5") {
+			Ok(n) => "age \\(n)",
+		}
+	}
 }
 `,
     solution: `context tour.result
 
 fn parseAge(s: String) -> Result[Int, String] {
-  match Int.parse(s) {
-    None => Err("not a number"),
-    Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
-  }
+	match Int.parse(s) {
+		None => Err("not a number"),
+		Some(n) => if n < 0 { Err("negative") } else { Ok(n) },
+	}
 }
 
 service run {
-  on call() -> Effect[String] {
-    match parseAge("-5") {
-      Ok(n) => "age \\(n)",
-      Err(e) => "problem: \\(e)",
-    }
-  }
+	on call() -> Effect[String] {
+		match parseAge("-5") {
+			Ok(n) => "age \\(n)",
+			Err(e) => "problem: \\(e)",
+		}
+	}
 }
 `,
     hint: "`\\(e)` puts the error text inside a string.",
@@ -330,47 +349,47 @@ service run {
     starter: `context tour.question
 
 fn parseAge(s: String) -> Result[Int, String] {
-  match Int.parse(s) {
-    None => Err("not a number"),
-    Some(n) => Ok(n),
-  }
+	match Int.parse(s) {
+		None => Err("not a number"),
+		Some(n) => Ok(n),
+	}
 }
 
 fn nextAge(s: String) -> Result[Int, String] {
-  let n = parseAge(s)
-  Ok(n + 1)
+	let n = parseAge(s)
+	Ok(n + 1)
 }
 
 service run {
-  on call() -> Effect[Int] {
-    match nextAge("41") {
-      Ok(n) => n,
-      Err(_) => 0,
-    }
-  }
+	on call() -> Effect[Int] {
+		match nextAge("41") {
+			Ok(n) => n,
+			Err(_) => 0,
+		}
+	}
 }
 `,
     solution: `context tour.question
 
 fn parseAge(s: String) -> Result[Int, String] {
-  match Int.parse(s) {
-    None => Err("not a number"),
-    Some(n) => Ok(n),
-  }
+	match Int.parse(s) {
+		None => Err("not a number"),
+		Some(n) => Ok(n),
+	}
 }
 
 fn nextAge(s: String) -> Result[Int, String] {
-  let n = parseAge(s)?
-  Ok(n + 1)
+	let n = parseAge(s)?
+	Ok(n + 1)
 }
 
 service run {
-  on call() -> Effect[Int] {
-    match nextAge("41") {
-      Ok(n) => n,
-      Err(_) => 0,
-    }
-  }
+	on call() -> Effect[Int] {
+		match nextAge("41") {
+			Ok(n) => n,
+			Err(_) => 0,
+		}
+	}
 }
 `,
     hint: "The `?` goes straight after the call, with no space.",

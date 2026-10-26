@@ -127,6 +127,14 @@ test("Shift+Alt+F formats from inside the editor", { skip }, async () => {
   assert.match(await page.editor(), /type Point = \{/);
 });
 
+test("the starter program is in the house style: indented with tabs, shown two columns wide", { skip }, async () => {
+  await fresh();
+  const raw = await page.eval(`[...document.querySelectorAll(".cm-line")].map((l) => l.textContent).join("\\n")`);
+  assert.match(raw, /\n\t/, "a nested line starts with a tab character");
+  assert.doesNotMatch(raw, /\n {2}\S/, "and not with spaces");
+  assert.equal(await page.eval(`getComputedStyle(document.querySelector(".cm-content")).tabSize`), "2");
+});
+
 test("a broken program shows the error and does not run", { skip }, async () => {
   await fresh();
   await page.type("zzz ");
@@ -525,7 +533,10 @@ test("on a wide screen Examples, Tour and Theme sit in the toolbar and there is 
 test("on a phone Examples, Tour and Theme fold into a menu button, in one toolbar row", { skip }, async () => {
   await page.setViewport(390, 800);
   try {
-    await fresh();
+    // Loaded from a link, with source that is not in the house style (the starter program is,
+    // so Format would have nothing to do), for the Format step at the end.
+    share.store.set("messyphone", MESSY);
+    await fresh("?s=messyphone");
     assert.equal(await page.visible("#menu-btn"), true);
     for (const id of ["#examples", "#tour-btn", "#format", "#theme"]) assert.equal(await page.visible(id), false, `${id} is hidden until the menu opens`);
     assert.equal(await page.visible("#run"), true);
@@ -559,7 +570,7 @@ test("on a phone Examples, Tour and Theme fold into a menu button, in one toolba
     assert.equal(await page.visible("#theme"), false, "an outside click closes the menu");
     assert.equal(await page.eval(`document.getElementById("menu-btn").getAttribute("aria-expanded")`), "false");
 
-    // Format works from the menu too (the starter program is not in the house style), and closes it.
+    // Format works from the menu too, and closes it.
     await page.waitFor(`!document.getElementById("format").disabled`, "Format to be enabled");
     await page.click("#menu-btn");
     await page.click("#format");
