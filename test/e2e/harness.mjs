@@ -232,10 +232,34 @@ export async function launchBrowser(chrome) {
 // How long the two `wrangler dev` processes together may take to answer.
 const WRANGLER_START_MS = 120000;
 
+/// A free port not already handed out in `used`: the OS may return a port it just released,
+/// and every port here is baked into the build or given to a wrangler session.
+async function uniquePort(used) {
+  for (;;) {
+    const port = await freePort();
+    if (!used.has(port)) return used.add(port), port;
+  }
+}
+
+/// `startWorkersOnce`, retried when a port was taken between being chosen and being bound.
+/// A free port is only free until something else binds it (the other wrangler session picks
+/// ports of its own, and the build runs in between), so on "Address already in use" start
+/// again from fresh ports; any other failure is real and is thrown at once.
 export async function startWorkers() {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await startWorkersOnce();
+    } catch (e) {
+      if (attempt >= 3 || !/Address already in use/.test(String(e))) throw e;
+    }
+  }
+}
+
+async function startWorkersOnce() {
   const { readFileSync, writeFileSync, openSync } = await import("node:fs");
   const { withShareBinding } = await import(new URL("../../scripts/with-share-binding.mjs", import.meta.url));
-  const [appPort, sandboxPort] = [await freePort(), await freePort()];
+  const used = new Set();
+  const [appPort, sandboxPort] = [await uniquePort(used), await uniquePort(used)];
   const appOrigin = `http://localhost:${appPort}`;
   const sandboxOrigin = `http://localhost:${sandboxPort}`;
   const out = ".e2e-workers-dist";
@@ -291,8 +315,8 @@ export async function startWorkers() {
     return rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
   };
   const servers = [
-    start({ configs: [files.app, files.fake], inspector: await freePort() }, appPort, "app"),
-    start({ configs: [files.sandbox], inspector: await freePort() }, sandboxPort, "sandbox"),
+    start({ configs: [files.app, files.fake], inspector: await uniquePort(used) }, appPort, "app"),
+    start({ configs: [files.sandbox], inspector: await uniquePort(used) }, sandboxPort, "sandbox"),
   ];
   // One deadline for both, well inside the test file's own timeout (package.json), so a
   // slow start fails here with wrangler's stderr rather than as a bare file timeout (#43).
