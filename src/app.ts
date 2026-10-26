@@ -29,7 +29,7 @@ import { clearDraft, loadDraft, loadRecent, loadTourDone, markTourDone, remember
 import { TOUR, nextIncomplete } from "./tour";
 import type { TourOutcome, TourStep } from "./tour";
 import { byteToUtf16Offset, utf16ToByteOffset } from "./positions";
-import init, { bynk_compile, bynk_analyze, bynk_hover, bynk_complete } from "./vendor/bynk_wasm.js";
+import init, { bynk_compile, bynk_analyze, bynk_hover, bynk_complete, bynk_format } from "./vendor/bynk_wasm.js";
 
 // The default program when there is no shared snippet in the URL: the first gallery
 // example (Hello, world).
@@ -242,6 +242,61 @@ function jumpTo(d: Diagnostic): void {
   const pos = Math.min(byteToUtf16Offset(text, d.from), view.state.doc.length);
   view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
   view.focus();
+}
+
+// Format: the compiler's own formatter (`bynk_format`), so the editor, the CLI and the
+// language server agree on the house style. One transaction, so Undo restores the text.
+function formatSource(): void {
+  if (!wasmReady) return;
+  const text = source();
+  let result: { ok: true; formatted: string } | { ok: false; error: string };
+  try {
+    result = JSON.parse(bynk_format(text));
+  } catch (e) {
+    result = { ok: false, error: String(e) };
+  }
+  if (!result.ok) {
+    // The formatter reports "line:col: message" for source it cannot parse: put the cursor
+    // there and show it as a diagnostic row (a button that jumps back to the spot).
+    const m = /^(\d+):(\d+):\s*([\s\S]*)$/.exec(result.error);
+    let from = 0;
+    let line = 0;
+    let col = 0;
+    if (m) {
+      const doc = view.state.doc;
+      line = Math.min(Math.max(Number(m[1]), 1), doc.lines);
+      const at = doc.line(line);
+      col = Math.max(Number(m[2]), 1);
+      const pos = Math.min(at.from + col - 1, at.to);
+      from = utf16ToByteOffset(text, pos);
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    }
+    renderDiagnostics([
+      { path: null, line, col, from, to: from, severity: "error", category: "bynk.format", message: `Can't format: ${m ? m[3] : result.error}` },
+    ]);
+    setStatus("can't format", "error");
+    return;
+  }
+  if (result.formatted === text) {
+    setStatus("already formatted", "ok");
+    return;
+  }
+  // Keep the cursor on the same line and column (clamped), not at the top of a rewritten file.
+  const head = view.state.selection.main.head;
+  const at = view.state.doc.lineAt(head);
+  const col = head - at.from;
+  const next = EditorState.create({ doc: result.formatted }).doc;
+  const nextLine = next.line(Math.min(at.number, next.lines));
+  const anchor = Math.min(nextLine.from + col, nextLine.to);
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: result.formatted },
+    selection: { anchor },
+    scrollIntoView: true,
+    userEvent: "input.format",
+  });
+  renderDiagnostics([]);
+  forceLinting(view);
+  setStatus("formatted", "ok");
 }
 
 function setDiagSummary(diags: Diagnostic[]): void {
@@ -946,6 +1001,7 @@ function makeEditor(doc: string): void {
         history(),
         keymap.of([
           { key: "Mod-Enter", run: () => (void compileAndRun(true), true) },
+          { key: "Shift-Alt-f", run: () => (formatSource(), true) },
           ...defaultKeymap,
           ...historyKeymap,
         ]),
@@ -1082,6 +1138,8 @@ async function main(): Promise<void> {
     $("run-key").textContent = "⌘↵";
     $("run").title = "Compile & run (⌘↵)";
   }
+  $("format").title = `Format to the house style (${IS_APPLE ? "⌥⇧F" : "Shift+Alt+F"})`;
+  $("format").addEventListener("click", formatSource);
   $("run").addEventListener("click", () => void compileAndRun(true));
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
@@ -1105,6 +1163,11 @@ async function main(): Promise<void> {
   selectTab("result");
   // Run from anywhere, not only inside the editor.
   document.addEventListener("keydown", (e) => {
+    // Format from anywhere too (inside the editor the keymap above handles it).
+    if (e.altKey && e.shiftKey && e.code === "KeyF" && !(e.target as HTMLElement).closest(".cm-editor")) {
+      e.preventDefault();
+      formatSource();
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !(e.target as HTMLElement).closest(".cm-editor")) {
       e.preventDefault();
       void compileAndRun(true);
@@ -1123,6 +1186,8 @@ async function main(): Promise<void> {
   // from the deploy root.
   await init(new URL(BYNK_WASM, location.href));
   wasmReady = true;
+  // The formatter lives in the same wasm, so Format waits for it like linting does.
+  ($("format") as HTMLButtonElement).disabled = false;
   if (!sandboxReady) setStatus("compiler ready", "ok");
   // Lint the initial program now that the analyser is loaded.
   forceLinting(view);

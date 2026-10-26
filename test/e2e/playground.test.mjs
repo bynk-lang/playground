@@ -77,6 +77,56 @@ test("a program with no capabilities runs: it has no compose.js, and the sandbox
   assert.doesNotMatch(out, /No zero-argument/);
 });
 
+// Badly formatted but valid Bynk, and a source the formatter cannot parse.
+const MESSY = "context  demo.fmt\n\ntype  Point={x:Int,y:Int}\n\nservice make {\non call()->Effect[Point]{\nPoint{x:3,y:4}\n}\n}\n";
+const UNPARSABLE = "context demo.fmt\n\ntype Point = { x: Int,\n";
+
+test("Format rewrites the source to the house style as one undoable step", { skip }, async () => {
+  share.store.set("messy", MESSY);
+  await fresh("?s=messy");
+  await page.waitFor(`!document.getElementById("format").disabled`, "Format to be enabled");
+  assert.match(await page.editor(), /type {2}Point=\{x:Int,y:Int\}/);
+  await page.click("#format");
+  await page.waitFor(`document.getElementById("status").textContent === "formatted"`, "the formatted status");
+  const formatted = await page.editor();
+  assert.match(formatted, /type Point = \{/, "spacing fixed");
+  assert.match(formatted, /\n\s*x: Int,\n\s*y: Int,\n/, "the record is laid out one field a line");
+  assert.doesNotMatch(formatted, /Point=\{x:Int/);
+
+  // Already formatted: nothing changes, and it says so.
+  await page.click("#format");
+  assert.equal(await page.text("#status"), "already formatted");
+  assert.equal(await page.editor(), formatted);
+
+  // One Undo puts the original back (a single transaction).
+  await page.eval(`document.querySelector(".cm-content").focus()`);
+  await page.key("z", { ctrl: true });
+  assert.match(await page.editor(), /type {2}Point=\{x:Int,y:Int\}/, "Undo restores the text before Format");
+});
+
+test("Format on source it cannot parse leaves it alone and says where", { skip }, async () => {
+  share.store.set("broken", UNPARSABLE);
+  await fresh("?s=broken");
+  await page.waitFor(`!document.getElementById("format").disabled`, "Format to be enabled");
+  const before = await page.editor();
+  await page.click("#format");
+  await page.waitFor(`document.getElementById("status").textContent === "can't format"`, "the failure status");
+  assert.equal(await page.editor(), before, "the source is untouched");
+  const row = await page.text(".diag");
+  assert.match(row, /Can't format: expected identifier as a record field name/);
+  assert.match(row, /bynk\.format/);
+});
+
+test("Shift+Alt+F formats from inside the editor", { skip }, async () => {
+  share.store.set("messy2", MESSY);
+  await fresh("?s=messy2");
+  await page.waitFor(`!document.getElementById("format").disabled`, "Format to be enabled");
+  await page.eval(`document.querySelector(".cm-content").focus()`);
+  await page.key("f", { alt: true, shift: true });
+  await page.waitFor(`document.getElementById("status").textContent === "formatted"`, "the formatted status");
+  assert.match(await page.editor(), /type Point = \{/);
+});
+
 test("a broken program shows the error and does not run", { skip }, async () => {
   await fresh();
   await page.type("zzz ");
@@ -368,7 +418,7 @@ test("embed: the share sheet's code loads the same snippet in the compact view",
   await settled();
   assert.equal(await page.eval(`document.documentElement.dataset.embed`), "1");
   assert.ok((await page.editor()).includes("// scratch"));
-  for (const hidden of ["#share", "#examples", "#tour-btn", "#theme", "#shared-note"]) {
+  for (const hidden of ["#share", "#examples", "#tour-btn", "#theme", "#format", "#shared-note"]) {
     assert.equal(await page.visible(hidden), false, `${hidden} is hidden in the embed`);
   }
   assert.equal(await page.visible("#run"), true);
@@ -467,7 +517,7 @@ test("the theme toggle switches and is remembered", { skip }, async () => {
 test("on a wide screen Examples, Tour and Theme sit in the toolbar and there is no menu button", { skip }, async () => {
   await fresh();
   assert.equal(await page.visible("#menu-btn"), false);
-  for (const id of ["#examples", "#tour-btn", "#theme"]) assert.equal(await page.visible(id), true, id);
+  for (const id of ["#examples", "#tour-btn", "#format", "#theme"]) assert.equal(await page.visible(id), true, id);
   const x = (id) => page.eval(`document.querySelector("${id}").getBoundingClientRect().left`);
   assert.ok((await x("#examples")) < (await x("#tour-btn")) && (await x("#tour-btn")) < (await x("#run")), "Examples, Tour, then Run");
 });
@@ -477,7 +527,7 @@ test("on a phone Examples, Tour and Theme fold into a menu button, in one toolba
   try {
     await fresh();
     assert.equal(await page.visible("#menu-btn"), true);
-    for (const id of ["#examples", "#tour-btn", "#theme"]) assert.equal(await page.visible(id), false, `${id} is hidden until the menu opens`);
+    for (const id of ["#examples", "#tour-btn", "#format", "#theme"]) assert.equal(await page.visible(id), false, `${id} is hidden until the menu opens`);
     assert.equal(await page.visible("#run"), true);
     assert.equal(await page.visible("#share"), true);
     assert.ok((await page.eval(`document.querySelector("header").getBoundingClientRect().height`)) < 90, "the toolbar stays one row");
@@ -486,7 +536,7 @@ test("on a phone Examples, Tour and Theme fold into a menu button, in one toolba
     // Opening moves focus to the first item; choosing an item acts and closes the menu.
     await page.click("#menu-btn");
     assert.equal(await page.eval(`document.getElementById("menu-btn").getAttribute("aria-expanded")`), "true");
-    for (const id of ["#examples", "#tour-btn", "#theme"]) assert.equal(await page.visible(id), true, id);
+    for (const id of ["#examples", "#tour-btn", "#format", "#theme"]) assert.equal(await page.visible(id), true, id);
     assert.equal(await page.eval(`document.activeElement.id`), "examples");
     await page.click("#examples");
     assert.equal(await page.eval(`document.getElementById("gallery").open`), true);
@@ -508,6 +558,13 @@ test("on a phone Examples, Tour and Theme fold into a menu button, in one toolba
     await page.eval(`document.querySelector("main").click()`);
     assert.equal(await page.visible("#theme"), false, "an outside click closes the menu");
     assert.equal(await page.eval(`document.getElementById("menu-btn").getAttribute("aria-expanded")`), "false");
+
+    // Format works from the menu too (the starter program is not in the house style), and closes it.
+    await page.waitFor(`!document.getElementById("format").disabled`, "Format to be enabled");
+    await page.click("#menu-btn");
+    await page.click("#format");
+    await page.waitFor(`document.getElementById("status").textContent === "formatted"`, "Format from the menu");
+    assert.equal(await page.visible("#format"), false, "the menu closed");
   } finally {
     await page.setViewport(1512, 860);
   }

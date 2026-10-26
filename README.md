@@ -20,7 +20,7 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 
 | Path | What |
 |---|---|
-| `src/app.ts` | The app: editor (CodeMirror 6), compile, diagnostics, run, deep-link, Share, examples picker. |
+| `src/app.ts` | The app: editor (CodeMirror 6), compile, diagnostics, run, deep-link, Share, examples picker. Format (the compiler's `bynk_format`, the same house style as the CLI and language server; Shift+Alt+F). |
 | `src/examples.ts` | The examples gallery — curated, **runnable** in-process snippets; the header picker loads them. `test/examples.test.mjs` compiles and runs every one. |
 | `test/e2e/` | Browser tests with no extra dependencies: build for two localhost ports, serve with a fake share service, drive headless Chrome over DevTools. Covers the run round trip, tabs, gallery, tour, share and fork, restore and Recent, theme and phone layout. `workers.test.mjs` runs the real app and sandbox Workers under `npx wrangler@4.152.0 dev` (built from the repo's `wrangler.*.jsonc`, with only the share service faked) and checks the sandbox redirect, the `SHARE` binding and the `SHARE_LIMIT` rate limit in a browser. |
 | `worker/app.mjs` | The app Worker: sends `/api/*` to the share service over the `SHARE` binding (503 when unbound), refuses the sandbox's files (`/sandbox`, `sandbox.js`: untrusted code never runs on the app origin), serves everything else from the assets. |
