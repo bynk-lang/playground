@@ -18,6 +18,7 @@ import { autocompletion } from "@codemirror/autocomplete";
 import type { CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import { bynkHighlighting } from "./highlight";
 import { bynkTreeSitterHighlighting } from "./tshighlight";
+import { groupFiles, lineCount } from "./jsview";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
 import { BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
 import type { CompileResult, Diagnostic, EmittedFile, RunReply, SandboxConnect } from "./shared";
@@ -232,6 +233,9 @@ let activeTab: Tab = "result";
 let lastReply: RunReply | undefined;
 let lastFiles: EmittedFile[] = [];
 let lastNote = "";
+// Whether the Compiled JS tab's set-aside sections are open: kept across runs, so
+// someone reading the runtime isn't snapped shut by the next Run.
+const jsOpen = { wiring: false, support: false };
 
 function jumpTo(d: Diagnostic): void {
   const text = source();
@@ -287,10 +291,36 @@ function renderOutput(): void {
       add("out-empty", "Nothing compiled yet. Press Run to see the JavaScript Bynk emits.");
       return;
     }
-    for (const f of lastFiles) {
-      add("out-file", `// ${f.path}`);
-      add("out-code", f.contents);
-    }
+    // The program's own modules first; the composition root and the runtime and
+    // bindings (most of the output) one click away (#14).
+    const view = groupFiles(lastFiles);
+    const files = (to: HTMLElement, list: EmittedFile[]) => {
+      for (const f of list) {
+        for (const [cls, text] of [["out-file", `// ${f.path}`], ["out-code", f.contents]]) {
+          const line = document.createElement("div");
+          line.className = cls;
+          line.textContent = text;
+          to.appendChild(line);
+        }
+      }
+    };
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const section = (key: keyof typeof jsOpen, list: EmittedFile[], label: string) => {
+      if (list.length === 0) return;
+      const box = document.createElement("details");
+      box.className = "out-section";
+      box.dataset.kind = key;
+      box.open = jsOpen[key];
+      box.addEventListener("toggle", () => (jsOpen[key] = box.open));
+      const summary = document.createElement("summary");
+      summary.textContent = `${label} · ${plural(list.length, "file")}, ${plural(lineCount(list), "line")}`;
+      box.appendChild(summary);
+      files(box, list);
+      out.appendChild(box);
+    };
+    files(out, view.user);
+    section("wiring", view.wiring, "Composition root");
+    section("support", view.support, "Runtime and bindings");
     return;
   }
 
