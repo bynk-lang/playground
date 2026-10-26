@@ -110,20 +110,22 @@ service roll {
     title: "Records",
     prose: "A record type groups named fields. You build one by naming its type and giving each field a value.",
     task: "Make the point `x: 10` and `y: 20`.",
-    starter: `${prelude("tour.records")}
+    starter: `context tour.records
+
 type Point = { x: Int, y: Int }
 
 service make {
-  on call() -> Effect[Point] given Logger {
+  on call() -> Effect[Point] {
     Point { x: 3, y: 4 }
   }
 }
 `,
-    solution: `${prelude("tour.records")}
+    solution: `context tour.records
+
 type Point = { x: Int, y: Int }
 
 service make {
-  on call() -> Effect[Point] given Logger {
+  on call() -> Effect[Point] {
     Point { x: 10, y: 20 }
   }
 }
@@ -145,11 +147,12 @@ service make {
     prose:
       "An `enum` lists every shape a value can take, and `match` must cover them all. The compiler refuses a match that misses a case, so there is no forgotten branch to find at runtime.",
     task: "Cover the missing `Yellow` case so it returns `\"slow down\"`.",
-    starter: `${prelude("tour.lights")}
+    starter: `context tour.lights
+
 type Light = enum { Red, Green, Yellow }
 
 service next {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     match Yellow {
       Red => "stop",
       Green => "go",
@@ -157,11 +160,12 @@ service next {
   }
 }
 `,
-    solution: `${prelude("tour.lights")}
+    solution: `context tour.lights
+
 type Light = enum { Red, Green, Yellow }
 
 service next {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     match Yellow {
       Red => "stop",
       Green => "go",
@@ -179,11 +183,12 @@ service next {
     prose:
       "A refined type is a base type plus a rule. `Slug.of(…)` checks the rule and returns `Ok` or `Err`, so an invalid value can never be treated as a `Slug`.",
     task: "`Slug` only allows lowercase letters. Change the input so the check passes and the result is `true`.",
-    starter: `${prelude("tour.slug")}
+    starter: `context tour.slug
+
 type Slug = String where Matches("[a-z]+")
 
 service check {
-  on call() -> Effect[Bool] given Logger {
+  on call() -> Effect[Bool] {
     match Slug.of("Hello World") {
       Ok(_) => true,
       Err(_) => false,
@@ -191,11 +196,12 @@ service check {
   }
 }
 `,
-    solution: `${prelude("tour.slug")}
+    solution: `context tour.slug
+
 type Slug = String where Matches("[a-z]+")
 
 service check {
-  on call() -> Effect[Bool] given Logger {
+  on call() -> Effect[Bool] {
     match Slug.of("hello") {
       Ok(_) => true,
       Err(_) => false,
@@ -212,24 +218,26 @@ service check {
     prose:
       "A `fn` is a pure function: the same input always gives the same output. It sits in the `context` beside the services and returns its last expression. `if` is an expression too.",
     task: "`grade` always returns `\"fail\"`. Make `grade(72)` return `\"pass\"` with an `if` on the score.",
-    starter: `${prelude("tour.functions")}
+    starter: `context tour.functions
+
 fn grade(score: Int) -> String {
   "fail"
 }
 
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     grade(72)
   }
 }
 `,
-    solution: `${prelude("tour.functions")}
+    solution: `context tour.functions
+
 fn grade(score: Int) -> String {
   if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
 }
 
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     grade(72)
   }
 }
@@ -243,9 +251,10 @@ service run {
     prose:
       "There is no `null`. A value that might be absent has the type `Option[T]`, either `Some(value)` or `None`, and `match` makes you handle both. `first()` returns the first element of a list, if there is one.",
     task: "Cover the missing `None` case, returning `\"empty\"`.",
-    starter: `${prelude("tour.option")}
+    starter: `context tour.option
+
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     let xs = [3, 8, 12]
     match xs.first() {
       Some(n) => "first is \\(n)",
@@ -253,9 +262,10 @@ service run {
   }
 }
 `,
-    solution: `${prelude("tour.option")}
+    solution: `context tour.option
+
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     let xs = [3, 8, 12]
     match xs.first() {
       Some(n) => "first is \\(n)",
@@ -273,7 +283,8 @@ service run {
     prose:
       "A function that can fail says so in its return type: `Result[T, E]` is `Ok(value)` or `Err(error)`. The caller cannot reach the value without deciding what to do about the error. Here `parseAge(\"-5\")` fails.",
     task: "Handle the `Err` case so the program returns `\"problem: negative\"`.",
-    starter: `${prelude("tour.result")}
+    starter: `context tour.result
+
 fn parseAge(s: String) -> Result[Int, String] {
   match Int.parse(s) {
     None => Err("not a number"),
@@ -282,14 +293,15 @@ fn parseAge(s: String) -> Result[Int, String] {
 }
 
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     match parseAge("-5") {
       Ok(n) => "age \\(n)",
     }
   }
 }
 `,
-    solution: `${prelude("tour.result")}
+    solution: `context tour.result
+
 fn parseAge(s: String) -> Result[Int, String] {
   match Int.parse(s) {
     None => Err("not a number"),
@@ -298,7 +310,7 @@ fn parseAge(s: String) -> Result[Int, String] {
 }
 
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     match parseAge("-5") {
       Ok(n) => "age \\(n)",
       Err(e) => "problem: \\(e)",
@@ -315,7 +327,8 @@ service run {
     prose:
       "Inside a function that returns a `Result`, `?` after an expression unwraps an `Ok` and carries on, or returns the `Err` from the function on the spot. It saves a nested `match` for every step that can fail.",
     task: "`n` is a `Result`, not a number, so `n + 1` does not type-check. Add `?` after `parseAge(s)`.",
-    starter: `${prelude("tour.question")}
+    starter: `context tour.question
+
 fn parseAge(s: String) -> Result[Int, String] {
   match Int.parse(s) {
     None => Err("not a number"),
@@ -329,7 +342,7 @@ fn nextAge(s: String) -> Result[Int, String] {
 }
 
 service run {
-  on call() -> Effect[Int] given Logger {
+  on call() -> Effect[Int] {
     match nextAge("41") {
       Ok(n) => n,
       Err(_) => 0,
@@ -337,7 +350,8 @@ service run {
   }
 }
 `,
-    solution: `${prelude("tour.question")}
+    solution: `context tour.question
+
 fn parseAge(s: String) -> Result[Int, String] {
   match Int.parse(s) {
     None => Err("not a number"),
@@ -351,7 +365,7 @@ fn nextAge(s: String) -> Result[Int, String] {
 }
 
 service run {
-  on call() -> Effect[Int] given Logger {
+  on call() -> Effect[Int] {
     match nextAge("41") {
       Ok(n) => n,
       Err(_) => 0,
