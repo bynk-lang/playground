@@ -10,7 +10,8 @@
 # example through the release's wasm compiler, the bundle) at the dispatched
 # release, and its result goes to canary.yml as `upstream-result`. canary.yml
 # also runs bynk-ci on the share service. When both pass with a release newer
-# than BYNK_VERSION, `bump` opens a pull request moving the pin to it.
+# than BYNK_VERSION, canary.yml's bump job opens a pull request moving the pin
+# to it, through the org's bump App.
 name: Bynk canary
 
 on:
@@ -46,77 +47,5 @@ jobs:
       kind: app
       working-directory: share
       source: src
-
-  # The org does not let GITHUB_TOKEN open pull requests, so the bump goes
-  # through a GitHub App (repository permissions Contents and Pull requests:
-  # Read and write, installed on this repository) whose client id and private
-  # key are the secrets BUMP_APP_ID and BUMP_APP_KEY. Its push also starts CI
-  # on the bump branch, which a GITHUB_TOKEN push would not. Until the secrets
-  # are set, the job warns and skips.
-  bump:
-    name: Propose the pin bump
-    needs: [tests, canary]
-    if: needs.canary.outputs.result == 'pass'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {} # the App token does the writing
-    steps:
-      - name: Check the App secrets
-        id: secrets
-        env:
-          APP_ID: ${{ secrets.BUMP_APP_ID }}
-          APP_KEY: ${{ secrets.BUMP_APP_KEY }}
-          TAG: ${{ needs.tests.outputs.tag }}
-        run: |
-          if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::BUMP_APP_ID / BUMP_APP_KEY are not set, so the canary cannot propose moving BYNK_VERSION (passed with $TAG)"
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Mint the bump token
-        if: steps.secrets.outputs.configured == 'true'
-        id: app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ secrets.BUMP_APP_ID }}
-          private-key: ${{ secrets.BUMP_APP_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-      - if: steps.secrets.outputs.configured == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-      - name: Open or update the bump pull request
-        if: steps.secrets.outputs.configured == 'true'
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          TAG: ${{ needs.tests.outputs.tag }}
-        run: |
-          set -euo pipefail
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::notice::$TAG is not a final release; the pin only moves to one"; exit 0; }
-          pinned="$(tr -d '[:space:]' < BYNK_VERSION)"
-          newest="$(printf '%s\n%s\n' "${pinned#v}" "${TAG#v}" | sort -V | tail -n1)"
-          if [ "$TAG" = "$pinned" ] || [ "$newest" != "${TAG#v}" ]; then
-            echo "::notice::BYNK_VERSION is $pinned; $TAG is not newer"
-            exit 0
-          fi
-          branch="canary/bynk-$TAG"
-          uid="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
-          git switch -c "$branch"
-          echo "$TAG" > BYNK_VERSION
-          git commit -am "Move the playground to Bynk $TAG"
-          git push --force origin "$branch"
-          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
-            gh pr create --head "$branch" --title "Move the playground to Bynk $TAG" --body \
-              "The Bynk canary passed with [$TAG](https://github.com/bynk-lang/bynk/releases/tag/$TAG): the tests, every gallery example and the share service's bynk-ci gate ([run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Merging this deploys it."
-          fi
-          # One bump open at a time: this one supersedes any for an older release.
-          gh pr list --state open --json number,headRefName \
-            --jq ".[] | select(.headRefName | startswith(\"canary/bynk-\")) | select(.headRefName != \"$branch\") | .number" \
-            | while read -r n; do
-                gh pr close "$n" --delete-branch --comment "Superseded by the bump to $TAG."
-              done
+      bump: true            # propose moving BYNK_VERSION to a newer release that passes
+    secrets: inherit        # the bump App's BUMP_APP_ID and BUMP_APP_KEY
