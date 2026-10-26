@@ -441,6 +441,55 @@ test("the theme toggle switches and is remembered", { skip }, async () => {
   assert.equal(await page.eval(`document.documentElement.dataset.theme`), after);
 });
 
+test("on a wide screen Examples, Tour and Theme sit in the toolbar and there is no menu button", { skip }, async () => {
+  await fresh();
+  assert.equal(await page.visible("#menu-btn"), false);
+  for (const id of ["#examples", "#tour-btn", "#theme"]) assert.equal(await page.visible(id), true, id);
+  const x = (id) => page.eval(`document.querySelector("${id}").getBoundingClientRect().left`);
+  assert.ok((await x("#examples")) < (await x("#tour-btn")) && (await x("#tour-btn")) < (await x("#run")), "Examples, Tour, then Run");
+});
+
+test("on a phone Examples, Tour and Theme fold into a menu button, in one toolbar row", { skip }, async () => {
+  await page.setViewport(390, 800);
+  try {
+    await fresh();
+    assert.equal(await page.visible("#menu-btn"), true);
+    for (const id of ["#examples", "#tour-btn", "#theme"]) assert.equal(await page.visible(id), false, `${id} is hidden until the menu opens`);
+    assert.equal(await page.visible("#run"), true);
+    assert.equal(await page.visible("#share"), true);
+    assert.ok((await page.eval(`document.querySelector("header").getBoundingClientRect().height`)) < 90, "the toolbar stays one row");
+    assert.equal(await page.eval(`document.documentElement.scrollWidth > innerWidth`), false);
+
+    // Opening moves focus to the first item; choosing an item acts and closes the menu.
+    await page.click("#menu-btn");
+    assert.equal(await page.eval(`document.getElementById("menu-btn").getAttribute("aria-expanded")`), "true");
+    for (const id of ["#examples", "#tour-btn", "#theme"]) assert.equal(await page.visible(id), true, id);
+    assert.equal(await page.eval(`document.activeElement.id`), "examples");
+    await page.click("#examples");
+    assert.equal(await page.eval(`document.getElementById("gallery").open`), true);
+    assert.equal(await page.visible("#examples"), false, "the menu closed");
+    await page.eval(`document.getElementById("gallery").close()`);
+
+    // Escape closes it and returns focus to the button.
+    await page.click("#menu-btn");
+    await page.key("Escape");
+    assert.equal(await page.visible("#examples"), false);
+    assert.equal(await page.eval(`document.activeElement.id`), "menu-btn");
+
+    // Theme works from the menu; a click elsewhere closes it.
+    const before = await page.eval(`document.documentElement.dataset.theme`);
+    await page.click("#menu-btn");
+    await page.click("#theme");
+    assert.notEqual(await page.eval(`document.documentElement.dataset.theme`), before);
+    await page.click("#menu-btn");
+    await page.eval(`document.querySelector("main").click()`);
+    assert.equal(await page.visible("#theme"), false, "an outside click closes the menu");
+    assert.equal(await page.eval(`document.getElementById("menu-btn").getAttribute("aria-expanded")`), "false");
+  } finally {
+    await page.setViewport(1512, 860);
+  }
+});
+
 test("on a phone the panes stack and nothing scrolls sideways", { skip }, async () => {
   await page.setViewport(390, 800);
   try {
