@@ -29,7 +29,7 @@ test("hello leads with its own module, about 15 lines", () => {
   const view = groupFiles(files);
   assert.deepEqual(paths(view.user), ["hello/world.js"]);
   assert.deepEqual(paths(view.wiring), ["compose.js"]);
-  assert.ok(view.support.some((f) => f.path.startsWith("__bynk_runtime/")), paths(view.support).join(", "));
+  assert.ok(view.support.some((f) => f.path === "runtime.js" || f.path.startsWith("__bynk_runtime/")), paths(view.support).join(", "));
   assert.ok(lineCount(view.user) <= 30, `user code is ${lineCount(view.user)} lines`);
   assert.ok(lineCount(view.support) > 10 * lineCount(view.user));
 });
