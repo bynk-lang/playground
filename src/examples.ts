@@ -114,14 +114,12 @@ service check {
     blurb: "A pure fn, with if as an expression.",
     source: `context demo.functions
 
-consumes bynk { Logger }
-
 fn grade(score: Int) -> String {
   if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
 }
 
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     grade(72)
   }
 }
@@ -132,8 +130,6 @@ service run {
     title: "Variants that carry data",
     blurb: "A sum type whose cases hold values, matched exhaustively.",
     source: `context demo.shapes
-
-consumes bynk { Logger }
 
 type Shape =
   | Circle(r: Int)
@@ -147,7 +143,7 @@ fn area(s: Shape) -> Int {
 }
 
 service run {
-  on call() -> Effect[Int] given Logger {
+  on call() -> Effect[Int] {
     area(Rect(3, 4))
   }
 }
@@ -159,10 +155,8 @@ service run {
     blurb: "No null: a value that may be missing is an Option.",
     source: `context demo.option
 
-consumes bynk { Logger }
-
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     let xs = [3, 8, 12]
     match xs.first() {
       Some(n) => "first is \\(n)",
@@ -178,8 +172,6 @@ service run {
     blurb: "A function that can fail says so in its type.",
     source: `context demo.result
 
-consumes bynk { Logger }
-
 fn parseAge(s: String) -> Result[Int, String] {
   match Int.parse(s) {
     None => Err("not a number"),
@@ -188,7 +180,7 @@ fn parseAge(s: String) -> Result[Int, String] {
 }
 
 service run {
-  on call() -> Effect[String] given Logger {
+  on call() -> Effect[String] {
     match parseAge("-5") {
       Ok(n) => "age \\(n)",
       Err(e) => "problem: \\(e)",
@@ -203,8 +195,6 @@ service run {
     blurb: "Carry on after Ok, or return the Err on the spot.",
     source: `context demo.question
 
-consumes bynk { Logger }
-
 fn parseAge(s: String) -> Result[Int, String] {
   match Int.parse(s) {
     None => Err("not a number"),
@@ -218,7 +208,7 @@ fn nextAge(s: String) -> Result[Int, String] {
 }
 
 service run {
-  on call() -> Effect[Int] given Logger {
+  on call() -> Effect[Int] {
     match nextAge("41") {
       Ok(n) => n,
       Err(_) => 0,
@@ -233,10 +223,8 @@ service run {
     blurb: "Collapse a list to one value with a function.",
     source: `context demo.lists
 
-consumes bynk { Logger }
-
 service run {
-  on call() -> Effect[Int] given Logger {
+  on call() -> Effect[Int] {
     let xs = [1, 2, 3, 4]
     xs.fold(0, (acc, x) => acc + x)
   }
