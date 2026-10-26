@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- A placeholder tile (a bold B on the brand amber) until the official Bynk mark is supplied. -->
-  <rect width="64" height="64" rx="14" fill="#f2b134"/>
-  <path fill="#1a1405" d="M19 13H34A9.5 9.5 0 0 1 34 32H36.5A9.5 9.5 0 0 1 36.5 51H19Z"/>
-  <g fill="#f2b134">
-    <path d="M27 20H33A2.5 2.5 0 0 1 33 25H27Z"/>
-    <path d="M27 38H35A3.5 3.5 0 0 1 35 45H27Z"/>
-  </g>
+  <!-- The bento blocks of the link-preview card (og.png): a wide amber block over a teal one and a
+       dark, outlined one. No background, so it sits on a light or a dark tab. A placeholder mark
+       until the official Bynk mark is supplied. -->
+  <rect x="3" y="3" width="58" height="33" rx="7" fill="#f2b134"/>
+  <rect x="3" y="40" width="28" height="21" rx="6" fill="#3cc4a6"/>
+  <rect x="34" y="41" width="26" height="19" rx="5" fill="#1d2825" stroke="#5f7a70" stroke-width="2"/>
 </svg>
