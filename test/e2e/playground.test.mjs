@@ -135,6 +135,32 @@ test("the starter program is in the house style: indented with tabs, shown two c
   assert.equal(await page.eval(`getComputedStyle(document.querySelector(".cm-content")).tabSize`), "2");
 });
 
+test("the insertion point is the amber brand-text colour and legible in both themes", { skip }, async () => {
+  await fresh();
+  const lum = (rgb) => {
+    const [r, g, b] = rgb.match(/\d+(\.\d+)?/g).slice(0, 3).map((v) => Number(v) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  for (const theme of ["dark", "light"]) {
+    await page.eval(`document.documentElement.dataset.theme = "${theme}"`);
+    const { caret, panel, brand } = await page.eval(`(() => {
+      const probe = document.createElement("span");
+      probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--brand-text");
+      document.body.append(probe);
+      const brand = getComputedStyle(probe).color;
+      probe.remove();
+      return {
+        caret: getComputedStyle(document.querySelector(".cm-content")).caretColor,
+        panel: getComputedStyle(document.querySelector(".cm-editor")).backgroundColor,
+        brand,
+      };
+    })()`);
+    assert.equal(caret, brand, `${theme}: the caret follows --brand-text, not CodeMirror's default black`);
+    assert.ok(ratio(caret, panel) >= 3, `${theme}: caret ${caret} on ${panel} is ${ratio(caret, panel).toFixed(2)}:1`);
+  }
+});
+
 test("a broken program shows the error and does not run", { skip }, async () => {
   await fresh();
   await page.type("zzz ");
