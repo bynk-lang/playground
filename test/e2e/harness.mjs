@@ -196,10 +196,13 @@ export async function launchBrowser(chrome) {
     async setViewport(width, height) {
       await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
     },
-    async key(key, { ctrl = false } = {}) {
-      const vk = { Enter: 13, Escape: 27, ArrowRight: 39, ArrowLeft: 37, Home: 36, End: 35 }[key];
-      const base = { key, code: key, modifiers: ctrl ? 2 : 0, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk };
-      const text = key === "Enter" && !ctrl ? { text: "\r" } : {};
+    /// Press a key; `ctrl`, `alt` and `shift` are held. A single letter ("f") is the KeyF key.
+    async key(key, { ctrl = false, alt = false, shift = false } = {}) {
+      const letter = /^[a-z]$/i.test(key);
+      const vk = letter ? key.toUpperCase().charCodeAt(0) : { Enter: 13, Escape: 27, ArrowRight: 39, ArrowLeft: 37, Home: 36, End: 35 }[key];
+      const modifiers = (alt ? 1 : 0) | (ctrl ? 2 : 0) | (shift ? 8 : 0);
+      const base = { key: shift && letter ? key.toUpperCase() : key, code: letter ? `Key${key.toUpperCase()}` : key, modifiers, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk };
+      const text = key === "Enter" && !modifiers ? { text: "\r" } : {};
       await send("Input.dispatchKeyEvent", { type: text.text ? "keyDown" : "rawKeyDown", ...base, ...text });
       await send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
     },
