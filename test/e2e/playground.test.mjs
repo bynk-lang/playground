@@ -100,6 +100,24 @@ test("the result tabs: Logs counts lines, arrow keys move between tabs", { skip 
   assert.equal(await page.eval(`document.querySelector("[role=tab][aria-selected=true]").id`), "tab-result");
 });
 
+test("Compiled JS leads with the program's own code; the runtime is a click away and stays open", { skip }, async () => {
+  await fresh();
+  await page.click("#tab-js");
+  // innerText, not textContent: a closed <details> keeps its files in the DOM, unrendered.
+  const shown = () => page.eval(`document.getElementById("output").innerText`);
+  let out = await shown();
+  assert.match(out, /\/\/ hello\/world\.js/);
+  assert.match(out, /Runtime and bindings · \d+ files, \d+ lines/);
+  assert.match(out, /Composition root · 1 file, \d+ lines/);
+  assert.doesNotMatch(out, /\/\/ runtime\.js/, "the runtime is collapsed");
+  assert.ok(out.split("\n").length < 40, `about 15 lines by default, got ${out.split("\n").length}`);
+  await page.click(`.out-section[data-kind=support] > summary`);
+  assert.match(await shown(), /\/\/ runtime\.js/);
+  await page.click("#run");
+  await settled();
+  assert.match(await shown(), /\/\/ runtime\.js/, "an opened section stays open across runs");
+});
+
 // A `#…` link to `source` (src/deeplink.ts: base64url of deflate-raw).
 const hashLink = (source) => `${app.url}#${deflateRawSync(Buffer.from(source)).toString("base64url")}`;
 

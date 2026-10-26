@@ -197,6 +197,9 @@
       .out-code { color: var(--ink); white-space: pre; }
       .out-file { color: var(--ink-muted); margin-top: 0.75rem; }
       .out-file:first-child { margin-top: 0; }
+      .out-section { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 0.5rem; }
+      .out-section > summary { cursor: pointer; color: var(--ink-muted); font-family: var(--font-sans); font-size: 0.8125rem; }
+      .out-section > summary:hover { color: var(--ink); }
 
       #right { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 0.75rem; min-height: 0; }
       #right:has(#tour[hidden]) { grid-template-rows: minmax(0, 1fr); }

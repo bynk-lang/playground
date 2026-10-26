@@ -27,7 +27,12 @@ export const TS_BYNK_WASM: string = typeof __TS_BYNK_WASM__ === "string" ? __TS_
 export interface EmittedFile {
   path: string;
   contents: string;
+  /// The program's own module, the composition root, or toolchain support code, once the
+  /// compiler says (bynk-lang/bynk#2425); src/jsview.ts infers it until then.
+  kind?: FileKind;
 }
+
+export type FileKind = "user" | "wiring" | "support";
 
 /// A diagnostic (mirrors the wasm `bynk_compile` / `bynk_analyze` JSON shape).
 export interface Diagnostic {
