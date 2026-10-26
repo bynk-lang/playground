@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <!-- The bento blocks of the link-preview card (og.png): a wide amber block over a teal one and a
-       dark, outlined one. No background, so it sits on a light or a dark tab. A placeholder mark
-       until the official Bynk mark is supplied. -->
+       dark, outlined one. No background, so it sits on a light or a dark tab. This is Bynk's
+       mark: the same blocks are the VS Code extension's icon and the docs site's favicon. -->
   <rect x="3" y="3" width="58" height="33" rx="7" fill="#f2b134"/>
   <rect x="3" y="40" width="28" height="21" rx="6" fill="#3cc4a6"/>
   <rect x="34" y="41" width="26" height="19" rx="5" fill="#1d2825" stroke="#5f7a70" stroke-width="2"/>
