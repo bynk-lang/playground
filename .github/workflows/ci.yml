@@ -98,7 +98,7 @@ jobs:
       - name: Deploy the share service
         id: deploy
         if: steps.mode.outputs.live == 'true'
-        uses: bynk-lang/bynk-deploy@5b76fe1c04f3782757020e05db15fed1e4026399 # v2
+        uses: bynk-lang/bynk-deploy@20eebc8606e3298fbf0f38522e2f47a9482a9b4d # v2
         with:
           version: ${{ steps.mode.outputs.tag }}
           working-directory: share
@@ -127,7 +127,7 @@ jobs:
           fi
       - name: Plan the share service
         if: steps.mode.outputs.live != 'true'
-        uses: bynk-lang/bynk-deploy@5b76fe1c04f3782757020e05db15fed1e4026399 # v2
+        uses: bynk-lang/bynk-deploy@20eebc8606e3298fbf0f38522e2f47a9482a9b4d # v2
         with:
           version: ${{ steps.mode.outputs.tag }}
           working-directory: share
