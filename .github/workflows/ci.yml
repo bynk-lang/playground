@@ -47,7 +47,7 @@ jobs:
       - name: Read the pinned Bynk release
         id: pin
         run: echo "tag=$(tr -d '[:space:]' < BYNK_VERSION)" >> "$GITHUB_OUTPUT"
-      - uses: bynk-lang/bynk-ci@26ca130282eb4fd74715388e56a629df3a7f3230 # v1.0.2
+      - uses: bynk-lang/bynk-ci@5bb74c76051d513386506c41b9c2bbde5bef91c8 # v1.1.0
         with:
           version: ${{ steps.pin.outputs.tag }}
           working-directory: share
