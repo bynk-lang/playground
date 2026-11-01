@@ -208,6 +208,8 @@
         border: 1px solid var(--line-strong) !important; border-radius: var(--radius-md); box-shadow: var(--shadow-pop); }
       .cm-tooltip-bynk-hover { padding: 0.25rem 0.5rem; font: 400 0.75rem/1.125rem var(--font-mono); }
       .cm-tooltip-autocomplete ul li[aria-selected] { background: var(--line) !important; color: var(--ink) !important; }
+      #reset { min-height: 0; padding: 0; font-size: 0.8125rem; text-transform: none; letter-spacing: 0; }
+      #reset[hidden] { display: none; }
       #diag-summary { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; }
       #diag-summary[data-kind="error"] { color: var(--danger); }
       #diag-summary[data-kind="warning"] { color: var(--brand-text); }
@@ -498,6 +500,8 @@
         <section class="pane" aria-label="Editor">
           <div class="pane-head">
             <span>main.bynk</span>
+            <!-- Shown while an example, shared snippet or tour step has been edited (#88). -->
+            <button id="reset" class="link" title="Put back the code as it was loaded; your edits go to Recent, and Undo brings them back" hidden>↺ Reset to original</button>
             <span id="diag-summary"></span>
           </div>
           <div id="editor"></div>

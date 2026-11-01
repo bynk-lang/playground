@@ -12,7 +12,7 @@ import {
   hoverTooltip,
 } from "@codemirror/view";
 import type { Tooltip } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, isolateHistory } from "@codemirror/commands";
 import { linter, lintGutter, forceLinting } from "@codemirror/lint";
 import type { Diagnostic as CmDiagnostic } from "@codemirror/lint";
 import { autocompletion } from "@codemirror/autocomplete";
@@ -1175,9 +1175,25 @@ function keepOutgoing(): void {
 // `own`: `src` is the user's work (a restored draft), not something the app supplied.
 function setEditorContent(src: string, own = false): void {
   keepOutgoing();
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: src } });
+  // An undo step of its own, never merged with typing just before or after it, so one
+  // Undo after a replacement (a reset, #88) brings back exactly what was there.
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: src }, annotations: isolateHistory.of("full") });
   pristine = own ? null : src;
+  updateReset();
   view.focus();
+}
+
+// Reset to original (#88): shown while the editor holds an edited copy of what the app
+// put there. Resetting keeps the edits under Recent (as any replacement does, #23) and is
+// one transaction, so Undo brings them straight back. A shared snippet's link stays.
+function updateReset(): void {
+  $("reset").hidden = pristine === null || source() === pristine;
+}
+
+function resetToOriginal(): void {
+  if (pristine === null) return;
+  setEditorContent(pristine);
+  void compileAndRun();
 }
 
 // The example last loaded from the gallery, shown as "Current" there.
@@ -1405,6 +1421,7 @@ function makeEditor(doc: string): void {
           if (u.docChanged) {
             scheduleDraftSave();
             scheduleArgs();
+            if (pristine !== null) updateReset();
           }
         }),
         highlightCompartment.of(bynkHighlighting()),
@@ -1519,6 +1536,8 @@ async function main(): Promise<void> {
   const initial = await loadInitialSource();
   makeEditor(initial);
   pristine = restoredDraft ? null : initial;
+  updateReset();
+  $("reset").addEventListener("click", resetToOriginal);
   mountExamples();
   mountTour();
   mountShareSheet();
