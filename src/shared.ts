@@ -67,6 +67,16 @@ export interface RunRequest {
   files: EmittedFile[];
   /// Wall-clock budget; the Worker is terminated past it.
   timeoutMs: number;
+  /// When the entry takes arguments (#82): the service whose handler to call, the
+  /// arguments in order, and the refinements each must pass (checked with the compiled
+  /// type's `of`). Absent: call the zero-argument handler, as always.
+  call?: RunCall;
+}
+
+export interface RunCall {
+  service: string;
+  args: unknown[];
+  checks: { name: string; refines: string[] }[];
 }
 
 /// sandbox → app: the outcome of a run.
@@ -83,6 +93,9 @@ export interface RunReply {
   timedOut?: boolean;
   /// True when the graph had no zero-argument entry to invoke.
   noEntry?: boolean;
+  /// An argument the handler can't take: it failed a refinement, or the handler takes a
+  /// different number of arguments than were read from its signature.
+  argError?: string;
   /// True when a newer run arrived first and this one's Worker was stopped.
   superseded?: boolean;
 }
