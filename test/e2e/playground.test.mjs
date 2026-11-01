@@ -299,9 +299,52 @@ test("a run that times out still shows what it logged first", { skip }, async ()
   await page.goto(hashLink(SLOW));
   await page.waitFor(`document.getElementById("status").textContent === "run failed"`, "the run to time out", 10000);
   assert.match(await page.text("#output"), /exceeded 3000 ms[\s\S]*logged 1 line first/);
+  assert.equal(await page.eval(`document.querySelector("#output [data-about]")?.textContent`), "Why?", "the limit links to What runs here");
   assert.equal(await page.text("#logs-badge"), "1");
   await page.click("#tab-logs");
   assert.match(await page.text("#output"), /slow/);
+});
+
+test("What runs here opens from the Learn menu, the gallery and every limit message", { skip }, async () => {
+  const opened = () => page.eval(`document.getElementById("about-runs").open`);
+  const close = () => page.click("#about-runs .gallery-head button");
+
+  // Without hitting a limit: from Learn, and from the gallery (over it, so Close goes back).
+  await fresh();
+  await page.click("#learn-btn");
+  await page.click("#learn-links [data-about]");
+  assert.equal(await opened(), true);
+  assert.equal(await page.visible("#learn-links"), false, "the dropdown closes behind it");
+  const text = await page.text("#about-runs");
+  for (const want of [/on call\(\) -> …/, /stopped after 3 seconds/, /Logger/, /Fetch and Secrets/, /bynk\.cloudflare/, /Install Bynk/]) assert.match(text, want);
+  await page.key("Escape");
+  assert.equal(await opened(), false);
+  // The item that opened it has closed with the dropdown, so focus goes back to Learn.
+  assert.equal(await page.eval(`document.activeElement.id`), "learn-btn");
+  await page.click("#examples");
+  await page.click("#gallery [data-about]");
+  assert.equal(await opened(), true);
+  await close();
+  assert.equal(await page.eval(`document.getElementById("gallery").open`), true, "back in the gallery");
+  await page.click("#gallery .gallery-head button");
+
+  // Each limit carries its own way in.
+  const limits = {
+    noentry: ["context demo.t\n\nservice s {\n\ton call(n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n", "#output"],
+    // An HTTP route compiles but isn't an entry, as the note says.
+    route: ['context demo.t\n\nactor Visitor { auth = None }\n\nservice api from http {\n\ton GET("/") () -> Effect[HttpResult[String]] by Visitor {\n\t\tOk("hi")\n\t}\n}\n', "#output"],
+    secrets: ['context demo.t\n\nconsumes bynk { Secrets }\n\nservice s {\n\ton call() -> Effect[String] given Secrets {\n\t\tlet _ <- Secrets.get("KEY")\n\t\t"x"\n\t}\n}\n', "#output"],
+    platform: ['context demo.t\n\nconsumes bynk.cloudflare { Kv }\n\nservice s {\n\ton call() -> Effect[String] given Kv {\n\t\t"x"\n\t}\n}\n', "#unsupported"],
+  };
+  for (const [id, [source, where]] of Object.entries(limits)) {
+    share.store.set(id, source);
+    await fresh(`?s=${id}`);
+    await page.click("#run");
+    await page.waitFor(`document.querySelector("${where} [data-about]")`, `the ${id} message's link`);
+    await page.click(`${where} [data-about]`);
+    assert.equal(await opened(), true, id);
+    await close();
+  }
 });
 
 test("when the code runner can't load, the page says so and can try again", { skip }, async () => {
@@ -690,11 +733,11 @@ test("on a wide screen Learn opens a dropdown of links to the Book, install and 
   assert.equal(await page.eval(`document.getElementById("bynk-version").textContent`), `Bynk ${version} release notes ↗`);
   assert.equal(await page.eval(`document.getElementById("bynk-version").href`), `https://github.com/bynk-lang/bynk/releases/tag/${version}`);
 
-  // Opening moves focus to the first link; Escape closes it and returns focus to the button.
+  // Opening moves focus to the first item; Escape closes it and returns focus to the button.
   await page.click("#learn-btn");
   assert.equal(await page.visible("#learn-links"), true);
   assert.equal(await page.eval(`document.getElementById("learn-btn").getAttribute("aria-expanded")`), "true");
-  assert.equal(await page.eval(`document.activeElement.textContent`), "The Bynk Book ↗");
+  assert.equal(await page.eval(`document.activeElement.textContent`), "What runs here");
   await page.key("Escape");
   assert.equal(await page.visible("#learn-links"), false);
   assert.equal(await page.eval(`document.activeElement.id`), "learn-btn");

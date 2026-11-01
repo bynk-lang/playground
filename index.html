@@ -149,8 +149,9 @@
         border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
       #learn[data-open] #learn-links { display: flex; }
       #learn-links a { color: var(--ink); text-decoration: none; font-weight: 600; padding: 0.5rem 0.75rem; border-radius: var(--radius-md); }
-      #learn-links a:hover { background: var(--surface-panel); }
-      #learn-links a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+      #learn-links button { all: unset; box-sizing: border-box; color: var(--ink); font-weight: 600; padding: 0.5rem 0.75rem; border-radius: var(--radius-md); cursor: pointer; }
+      #learn-links a:hover, #learn-links button:hover { background: var(--surface-panel); }
+      #learn-links a:focus-visible, #learn-links button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
       #learn-links #bynk-version { font-weight: 400; font-size: 0.8125rem; color: var(--ink-muted);
         border-top: 1px solid var(--line); border-radius: 0; margin-top: 0.25rem; }
       #learn-links #bynk-version[hidden] { display: none; }
@@ -274,6 +275,14 @@
       dialog.sheet::backdrop { background: rgba(0, 0, 0, 0.5); }
       dialog#gallery { width: min(47.5rem, calc(100vw - 1.5rem)); }
       dialog#share-sheet { width: min(28.75rem, calc(100vw - 1.5rem)); }
+      dialog#about-runs { width: min(40rem, calc(100vw - 1.5rem)); }
+      .about-body { font-size: 0.875rem; line-height: 1.375rem; }
+      .about-body h3 { margin: 1rem 0 0.25rem; font-size: 0.9375rem; font-weight: 650; }
+      .about-body p, .about-body ul { margin: 0 0 0.5rem; }
+      .about-body ul { padding-left: 1.25rem; }
+      .about-body code { font: 400 0.8125rem var(--font-mono); }
+      .gallery-foot { margin: 0.75rem 0 0; color: var(--ink-muted); font-size: 0.875rem; }
+      .gallery-foot button.link, .out-note button.link, #unsupported button.link { padding: 0; min-height: 0; font-size: inherit; }
       #share-url { flex: 1; min-width: 0; padding: 0.5rem 0.75rem; min-height: 2.5rem; font: 400 0.8125rem var(--font-mono);
         background: var(--surface-panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
       .share-row { display: flex; gap: 0.5rem; margin: 0.75rem 0 0.5rem; }
@@ -390,6 +399,7 @@
             <button id="learn-btn" aria-expanded="false" aria-controls="learn-links" title="Docs, install and source">Learn ▾</button>
             <div id="learn-links">
               <span class="learn-label">Learn</span>
+              <button type="button" data-about aria-haspopup="dialog">What runs here</button>
               <a href="https://bynk-lang.org/book/" target="_blank" rel="noopener">The Bynk Book ↗</a>
               <a href="https://bynk-lang.org/book/tutorials/01-first-program/" target="_blank" rel="noopener">Your first program ↗</a>
               <a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a>
@@ -504,6 +514,34 @@
           <button id="embed-copy">Copy embed code</button>
         </details>
       </dialog>
+      <!-- What the playground can run, and why (#81): opened from the Learn menu, the gallery
+           and each limit message (any [data-about] button). -->
+      <dialog id="about-runs" class="sheet" aria-labelledby="about-runs-title">
+        <form method="dialog" class="gallery-head">
+          <h2 id="about-runs-title">What runs here</h2>
+          <button class="link" value="close" aria-label="Close What runs here">Close</button>
+        </form>
+        <div class="about-body">
+          <p>The playground compiles your program in the browser and runs it in a sandboxed Worker in this tab: nothing is sent to a server to run.</p>
+          <h3>One handler, called with no arguments</h3>
+          <p>Run calls the first service handler that takes no arguments, written <code>on call() -&gt; …</code>. A program without one still compiles, and you can read its JavaScript in the Compiled JS tab, but nothing runs. Handlers that take arguments, or that serve HTTP routes, aren't called.</p>
+          <h3>Three seconds</h3>
+          <p>A run is stopped after 3 seconds, so a loop that never returns can't hang the tab. Whatever it logged before then is still in the Logs tab.</p>
+          <h3>Capabilities</h3>
+          <p>A Bynk handler reaches the outside world, such as the clock, randomness or the network, only through <em>capabilities</em>. A file brings them in with <code>consumes</code>, and each handler lists the ones it uses after <code>given</code>, so a handler's signature says everything it can touch, and the compiler holds it to that.</p>
+          <ul>
+            <li><strong>Work here:</strong> <code>Logger</code> (its output is in the Logs tab), <code>Clock</code> and <code>Random</code>, from <code>consumes bynk { … }</code>.</li>
+            <li><strong>Withheld:</strong> <code>Fetch</code> and <code>Secrets</code>. The sandbox has no network and no secret store, so a program that uses them compiles, but the call fails when it runs.</li>
+            <li><strong>Not runnable:</strong> a program that consumes <code>bynk.cloudflare</code> (<code>Kv</code>, <code>R2</code>, <code>Queue</code> and the rest of the platform) is checked here but can't run in a browser.</li>
+          </ul>
+          <h3>Running the rest</h3>
+          <p>Install Bynk to run any program on your own machine, then deploy it to Cloudflare Workers when it's ready.</p>
+          <ul class="tour-next-steps">
+            <li><a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a></li>
+            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">Build an HTTP service ↗</a></li>
+          </ul>
+        </div>
+      </dialog>
       <dialog id="gallery" class="sheet" aria-labelledby="gallery-title">
         <form method="dialog" class="gallery-head">
           <h2 id="gallery-title">Examples</h2>
@@ -516,6 +554,7 @@
           <div id="recent-grid" class="gallery-grid"></div>
         </div>
         <p id="gallery-empty" class="out-empty" hidden>No example matches that search.</p>
+        <p class="gallery-foot">Every example runs here, in your browser. <button type="button" class="link" data-about>What runs here?</button></p>
       </dialog>
     </div>
     <script type="module" src="./app.js"></script>
