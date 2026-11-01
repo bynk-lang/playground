@@ -26,6 +26,8 @@ import type { CompileResult, Diagnostic, EmittedFile, RunCall, RunReply, Sandbox
 import { decodeArgs, encodeArgs, entrySignature, readArg } from "./args";
 import type { EntrySignature, FieldValue } from "./args";
 import { hintFor, learnMoreHref } from "./diagnostics";
+import { harvestReference, searchReference } from "./reference";
+import type { CompletionItem, RefGroup } from "./reference";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
 import { mountGallery } from "./gallery";
@@ -72,6 +74,9 @@ let sandboxReady = false;
 let sandboxFailed = false;
 // The linter no-ops until the wasm compiler has loaded (slice 5d).
 let wasmReady = false;
+// Settles once the compiler has loaded, for what waits on it (the reference panel).
+let wasmLoadedResolve: () => void = () => {};
+const wasmLoaded = new Promise<void>((resolve) => (wasmLoadedResolve = resolve));
 
 // A CodeMirror lint source: on each (debounced) change, ask the wasm analyser for
 // diagnostics and render them inline (squiggles + gutter). Non-bailing, so type
@@ -766,12 +771,18 @@ function aboutButton(text: string): HTMLButtonElement {
 }
 
 function mountAbout(): void {
-  const dialog = $("about-runs") as HTMLDialogElement;
+  mountSheet($("about-runs") as HTMLDialogElement, "[data-about]");
+}
+
+// A dialog that any button matching `selector` opens: What runs here (#81) and the
+// standard library reference (#85). `onOpen` runs as it opens.
+function mountSheet(dialog: HTMLDialogElement, selector: string, onOpen?: () => void): void {
   let opener: HTMLElement | null = null;
   document.addEventListener("click", (e) => {
-    const button = (e.target as HTMLElement).closest<HTMLElement>("[data-about]");
+    const button = (e.target as HTMLElement).closest<HTMLElement>(selector);
     if (!button || dialog.open) return;
     opener = button;
+    onOpen?.();
     dialog.showModal();
   });
   // Opened from the Learn dropdown or the phone menu, the item has closed behind the
@@ -782,6 +793,72 @@ function mountAbout(): void {
     }
     opener = null;
   });
+}
+
+// The standard library reference (#85): read from the compiler on first open (it needs
+// the wasm), then searched as you type.
+function mountReference(): void {
+  const dialog = $("reference") as HTMLDialogElement;
+  const search = $("reference-search") as HTMLInputElement;
+  const list = $("reference-list");
+  let groups: RefGroup[] | null = null;
+  const render = (): void => {
+    list.textContent = "";
+    if (!groups) {
+      list.append(Object.assign(document.createElement("p"), { className: "out-empty", textContent: "Loading the compiler…" }));
+      return;
+    }
+    const found = searchReference(groups, search.value);
+    if (found.length === 0) {
+      list.append(Object.assign(document.createElement("p"), { className: "out-empty", textContent: "Nothing matches that search." }));
+      return;
+    }
+    for (const section of ["Types", "Capabilities", "Modules"] as const) {
+      const inSection = found.filter((g) => g.section === section);
+      if (inSection.length === 0) continue;
+      list.append(Object.assign(document.createElement("h3"), { className: "recent-title", textContent: section }));
+      for (const g of inSection) {
+        const box = document.createElement("section");
+        box.className = "ref-group";
+        const head = document.createElement("h4");
+        head.append(Object.assign(document.createElement("code"), { textContent: g.owner }));
+        if (g.about) head.append(" ", Object.assign(document.createElement("span"), { textContent: g.about.replace(/`/g, "") }));
+        box.append(head);
+        if (g.entries.length > 0) {
+          const ul = document.createElement("ul");
+          for (const e of g.entries) {
+            // `Int.parse(s: String) -> …`; a module's functions are called by their own name.
+            const text = section === "Modules" ? e.signature : `${g.owner}.${e.signature}`;
+            const li = document.createElement("li");
+            li.append(Object.assign(document.createElement("code"), { textContent: text }));
+            ul.append(li);
+          }
+          box.append(ul);
+        }
+        list.append(box);
+      }
+    }
+  };
+  const load = (): void => {
+    if (groups || !wasmReady) return;
+    try {
+      groups = harvestReference((src, offset) => (JSON.parse(bynk_complete(src, offset)) as { items: CompletionItem[] }).items);
+    } catch {
+      groups = [];
+    }
+  };
+  mountSheet(dialog, "[data-reference]", () => {
+    search.value = "";
+    load();
+    render();
+    // The compiler may still be loading: fill in once it has.
+    if (!groups) void wasmLoaded.then(() => {
+      load();
+      render();
+    });
+    queueMicrotask(() => search.focus());
+  });
+  search.addEventListener("input", render);
 }
 
 function mountTheme(): void {
@@ -1442,6 +1519,7 @@ async function main(): Promise<void> {
   mountMenu();
   mountLearn();
   mountAbout();
+  mountReference();
   // Enter in an argument field runs, like the Run button.
   $("args").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1458,6 +1536,7 @@ async function main(): Promise<void> {
   // from the deploy root.
   await init(new URL(BYNK_WASM, location.href));
   wasmReady = true;
+  wasmLoadedResolve();
   // The formatter lives in the same wasm, so Format waits for it like linting does.
   ($("format") as HTMLButtonElement).disabled = false;
   if (!sandboxReady) setStatus("compiler ready", "ok");

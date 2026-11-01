@@ -347,6 +347,25 @@ test("What runs here opens from the Learn menu, the gallery and every limit mess
   }
 });
 
+test("the standard library reference opens from Learn and finds how to parse an Int", { skip }, async () => {
+  await fresh();
+  await page.click("#learn-btn");
+  await page.click("#learn-links [data-reference]");
+  assert.equal(await page.eval(`document.getElementById("reference").open`), true);
+  assert.equal(await page.eval(`document.activeElement.id`), "reference-search");
+  await page.waitFor(`document.querySelector("#reference-list .ref-group")`, "the reference, read from the compiler");
+  for (const section of ["Types", "Capabilities", "Modules"]) {
+    assert.ok((await page.eval(`[...document.querySelectorAll("#reference-list > h3")].map((h) => h.textContent)`)).includes(section), section);
+  }
+  await page.eval(`(() => { const s = document.getElementById("reference-search"); s.value = "parse int"; s.dispatchEvent(new Event("input")); })()`);
+  const lines = await page.eval(`[...document.querySelectorAll("#reference-list li code")].map((c) => c.textContent)`);
+  assert.ok(lines.includes("Int.parse(s: String) -> Option[Int]"), lines.join("\n"));
+  await page.eval(`(() => { const s = document.getElementById("reference-search"); s.value = "zzzz"; s.dispatchEvent(new Event("input")); })()`);
+  assert.match(await page.text("#reference-list"), /Nothing matches/);
+  await page.click("#reference .gallery-head button");
+  await page.waitFor(`document.activeElement.id === "learn-btn"`, "focus back on Learn");
+});
+
 const GREET =
   'context demo.greet\n\ntype Slug = String where Matches("[a-z]+")\n\nservice greet {\n\ton call(name: String, times: Int, tag: Slug) -> Effect[String] {\n\t\tname.concat(" x").concat(times.toString()).concat(" #").concat(tag)\n\t}\n}\n';
 
