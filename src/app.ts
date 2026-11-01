@@ -936,6 +936,7 @@ function showTourStep(i: number, fresh = true): void {
   tourIndex = i;
   tourDone = false;
   currentExampleId = null;
+  $("tour-end").hidden = true;
   $("tour").hidden = false;
   dismissCoach();
   $("tour-btn").setAttribute("aria-pressed", "true");
@@ -1003,6 +1004,9 @@ function nextTour(): void {
     exitTour();
     setStatus("tour complete", "ok");
     window.history.replaceState(null, "", location.pathname);
+    // Where to go next, in the tour card's place; focus follows, as Finish has gone.
+    $("tour-end").hidden = false;
+    $("tour-end-title").focus();
     return;
   }
   showTourStep(tourIndex + 1);
@@ -1012,10 +1016,15 @@ function mountTour(): void {
   $("tour-btn").addEventListener("click", () =>
     tourIndex >= 0 ? exitTour(true) : showTourStep(nextIncomplete(TOUR.map((s) => s.id), loadTourDone())),
   );
-  $("tour-restart").addEventListener("click", () => {
+  const restart = (): void => {
     resetTourDone();
     showTourStep(0);
-  });
+  };
+  $("tour-restart").addEventListener("click", restart);
+  $("tour-end-restart").addEventListener("click", restart);
+  $("tour-end-close").addEventListener("click", () => ($("tour-end").hidden = true));
+  // The toolbar's Examples button opens the gallery, from the phone menu too.
+  $("tour-end-examples").addEventListener("click", () => $("examples").click());
   updateTourButton();
   $("tour-exit").addEventListener("click", () => exitTour(true));
   $("tour-check").addEventListener("click", () => void checkTour());

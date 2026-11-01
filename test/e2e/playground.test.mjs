@@ -399,6 +399,42 @@ test("the tour: a wrong answer gets a hint, the solution passes, progress is rem
   await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 2 of")`, "resume at step 2");
 });
 
+test("finishing the tour shows where to go next, with the tour to start over", { skip }, async () => {
+  // Pass the last step and press Finish.
+  const finish = async () => {
+    await fresh("?tour=question");
+    await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 9 of")`, "the last step");
+    await page.click("#tour-solution");
+    await page.click("#tour-check");
+    await page.waitFor(`document.getElementById("tour-feedback").dataset.kind === "ok"`, "the last step passes");
+    assert.equal(await page.text("#tour-next"), "Finish");
+    await page.click("#tour-next");
+  };
+  await finish();
+  assert.equal(await page.visible("#tour"), false);
+  assert.equal(await page.visible("#tour-end"), true);
+  assert.equal(await page.eval(`document.activeElement.id`), "tour-end-title", "focus moves to the panel, as Finish has gone");
+  assert.equal(await status(), "tour complete");
+  const hrefs = await page.eval(`[...document.querySelectorAll("#tour-end a")].map((a) => a.href)`);
+  for (const want of ["https://bynk-lang.org/book/tutorials/02-http-service/", "https://bynk-lang.org/book/", "https://bynk-lang.org/book/introduction/install/"]) {
+    assert.ok(hrefs.includes(want), want);
+  }
+
+  // Browse the examples opens the gallery; Close puts the panel away.
+  await page.click("#tour-end-examples");
+  assert.equal(await page.eval(`document.getElementById("gallery").open`), true);
+  await page.eval(`document.getElementById("gallery").close()`);
+  await page.click("#tour-end-close");
+  assert.equal(await page.visible("#tour-end"), false);
+
+  // Start tour over goes back to step 1 with progress cleared.
+  await finish();
+  await page.click("#tour-end-restart");
+  await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 1 of")`, "tour step 1");
+  assert.equal(await page.visible("#tour-end"), false);
+  assert.equal(await page.text("#tour-btn"), "Tour");
+});
+
 test("share: a short link round-trips and the opened snippet offers Fork", { skip }, async () => {
   await fresh();
   await page.type(SCRATCH);

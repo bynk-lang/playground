@@ -234,7 +234,7 @@
       .out-section > summary:hover { color: var(--ink); }
 
       #right { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 0.75rem; min-height: 0; }
-      #right:has(#tour[hidden]) { grid-template-rows: minmax(0, 1fr); }
+      #right:has(#tour[hidden]):has(#tour-end[hidden]) { grid-template-rows: minmax(0, 1fr); }
       button.link { background: none; border: 0; min-height: 1.75rem; padding: 0.125rem 0.375rem; color: var(--accent);
         font-weight: 600; text-decoration: underline; text-underline-offset: 0.1875rem; }
       button:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -254,6 +254,12 @@
       #tour-feedback[data-kind="ok"] { color: var(--accent); }
       #tour-feedback[data-kind="miss"] { color: var(--brand-text); }
       .tour-actions { display: flex; gap: 0.5rem; align-items: center; }
+      /* The end of the tour (#78): where to go next. */
+      .tour h2:focus { outline: none; }
+      .tour-next-steps { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+      .tour-next-steps li { margin: 0.25rem 0; }
+      .tour-next-steps a { color: var(--accent); font-weight: 600; text-underline-offset: 0.1875rem; }
+      .tour-next-steps button.link { padding: 0; min-height: 0; }
 
       /* Examples gallery */
       dialog.sheet { max-height: calc(100vh - 3rem); padding: 1rem;
@@ -444,6 +450,19 @@
             <button id="tour-solution" class="link">Show solution</button>
             <button id="tour-restart" class="link" hidden>Start tour over</button>
           </div>
+        </section>
+        <!-- Shown when the last step is finished, in the tour card's place (#78). -->
+        <section id="tour-end" class="tour" aria-labelledby="tour-end-title" hidden>
+          <div class="tour-meta"><span>Tour · complete</span><button id="tour-end-close" class="link">Close</button></div>
+          <h2 id="tour-end-title" tabindex="-1">You finished the tour</h2>
+          <p>You have met services and capabilities, Bynk's data types, and how it handles a missing value or a failure. Where next:</p>
+          <ul class="tour-next-steps">
+            <li><button id="tour-end-examples" class="link">Browse the examples</button>: <em>Lists and fold</em> and <em>Variants that carry data</em> go past the tour.</li>
+            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">Build an HTTP service ↗</a>, the Book's next tutorial.</li>
+            <li><a href="https://bynk-lang.org/book/" target="_blank" rel="noopener">Read the Bynk Book ↗</a>, the guide and reference.</li>
+            <li><a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a> to run programs on your own machine.</li>
+          </ul>
+          <div class="tour-actions"><button id="tour-end-restart" class="link">Start tour over</button></div>
         </section>
         <section class="pane" aria-label="Results">
           <div class="pane-head">
