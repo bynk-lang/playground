@@ -23,6 +23,11 @@ export const BYNK_WASM: string = typeof __BYNK_WASM__ === "string" ? __BYNK_WASM
 export const TS_WASM: string = typeof __TS_WASM__ === "string" ? __TS_WASM__ : "tree-sitter.wasm";
 export const TS_BYNK_WASM: string = typeof __TS_BYNK_WASM__ === "string" ? __TS_BYNK_WASM__ : "tree-sitter-bynk.wasm";
 
+// The Bynk release whose compiler the app bundles (build.mjs), e.g. "v0.405.4"; null when
+// unbuilt.
+declare const __BYNK_VERSION__: string;
+export const BYNK_VERSION: string | null = typeof __BYNK_VERSION__ === "string" ? __BYNK_VERSION__ : null;
+
 /// One emitted JavaScript module of a compiled program.
 export interface EmittedFile {
   path: string;

@@ -151,6 +151,10 @@
       #learn-links a { color: var(--ink); text-decoration: none; font-weight: 600; padding: 0.5rem 0.75rem; border-radius: var(--radius-md); }
       #learn-links a:hover { background: var(--surface-panel); }
       #learn-links a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+      #learn-links #bynk-version { font-weight: 400; font-size: 0.8125rem; color: var(--ink-muted);
+        border-top: 1px solid var(--line); border-radius: 0; margin-top: 0.25rem; }
+      #learn-links #bynk-version[hidden] { display: none; }
+      #bynk-version code { font: 400 0.75rem var(--font-mono); color: var(--ink); }
       .learn-label { display: none; }
 
       /* Coachmark under Run */
@@ -379,6 +383,8 @@
               <a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a>
               <a href="https://github.com/bynk-lang/bynk" target="_blank" rel="noopener">Bynk on GitHub ↗</a>
               <a href="https://github.com/bynk-lang/playground" target="_blank" rel="noopener">Playground source &amp; issues ↗</a>
+              <!-- The compiler release this build runs (#79), filled in by the app. -->
+              <a id="bynk-version" target="_blank" rel="noopener" hidden></a>
             </div>
           </div>
           <button id="format" disabled title="Format to the house style">Format</button>
