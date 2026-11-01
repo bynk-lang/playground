@@ -317,8 +317,10 @@ test("What runs here opens from the Learn menu, the gallery and every limit mess
   assert.equal(await page.visible("#learn-links"), false, "the dropdown closes behind it");
   const text = await page.text("#about-runs");
   for (const want of [/on call\(\) -> …/, /stopped after 3 seconds/, /Logger/, /Fetch and Secrets/, /bynk\.cloudflare/, /Install Bynk/]) assert.match(text, want);
-  await close();
+  await page.key("Escape");
   assert.equal(await opened(), false);
+  // The item that opened it has closed with the dropdown, so focus goes back to Learn.
+  assert.equal(await page.eval(`document.activeElement.id`), "learn-btn");
   await page.click("#examples");
   await page.click("#gallery [data-about]");
   assert.equal(await opened(), true);
@@ -329,6 +331,8 @@ test("What runs here opens from the Learn menu, the gallery and every limit mess
   // Each limit carries its own way in.
   const limits = {
     noentry: ["context demo.t\n\nservice s {\n\ton call(n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n", "#output"],
+    // An HTTP route compiles but isn't an entry, as the note says.
+    route: ['context demo.t\n\nactor Visitor { auth = None }\n\nservice api from http {\n\ton GET("/") () -> Effect[HttpResult[String]] by Visitor {\n\t\tOk("hi")\n\t}\n}\n', "#output"],
     secrets: ['context demo.t\n\nconsumes bynk { Secrets }\n\nservice s {\n\ton call() -> Effect[String] given Secrets {\n\t\tlet _ <- Secrets.get("KEY")\n\t\t"x"\n\t}\n}\n', "#output"],
     platform: ['context demo.t\n\nconsumes bynk.cloudflare { Kv }\n\nservice s {\n\ton call() -> Effect[String] given Kv {\n\t\t"x"\n\t}\n}\n', "#unsupported"],
   };

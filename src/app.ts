@@ -654,8 +654,20 @@ function aboutButton(text: string): HTMLButtonElement {
 
 function mountAbout(): void {
   const dialog = $("about-runs") as HTMLDialogElement;
+  let opener: HTMLElement | null = null;
   document.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest("[data-about]") && !dialog.open) dialog.showModal();
+    const button = (e.target as HTMLElement).closest<HTMLElement>("[data-about]");
+    if (!button || dialog.open) return;
+    opener = button;
+    dialog.showModal();
+  });
+  // Opened from the Learn dropdown or the phone menu, the item has closed behind the
+  // dialog, so focus would fall to the page: hand it to the button that showed the item.
+  dialog.addEventListener("close", () => {
+    if (opener && !opener.checkVisibility()) {
+      $(matchMedia("(max-width: 800px)").matches ? "menu-btn" : "learn-btn").focus();
+    }
+    opener = null;
   });
 }
 
