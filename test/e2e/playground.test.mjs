@@ -48,7 +48,7 @@ after(async () => {
 
 const status = () => page.text("#status");
 const settled = () =>
-  page.waitFor(`/^(ran|run failed|check arguments|\\d+ errors?|link copied)$/.test(document.getElementById("status").textContent)`, "a finished run");
+  page.waitFor(`/^(ran|run failed|check arguments|needs arguments|\\d+ errors?|link copied)$/.test(document.getElementById("status").textContent)`, "a finished run");
 
 // Open the app on a clean slate (no saved draft, recents or tour progress).
 async function fresh(path = "") {
@@ -367,7 +367,12 @@ test("a handler that takes arguments runs with the values under Arguments, no ed
     await page.eval(`[...document.querySelectorAll("#args .arg-name")].map((n) => n.textContent)`),
     ["name: String", "times: Int", "tag: Slug"],
   );
-  // The first run had empty fields: `times` isn't a number yet, so nothing ran.
+  // Opened with empty fields, it waits for them rather than reporting them as wrong.
+  assert.equal(await page.text("#status"), "needs arguments");
+  assert.match(await page.text("#output"), /Fill in the arguments above, then press Run/);
+  // Run with them still empty says which one is missing.
+  await page.click("#run");
+  await page.waitFor(`document.getElementById("status").textContent === "check arguments"`, "the argument check");
   assert.match(await page.text("#output"), /Can't call the handler: `times` needs a whole number/);
 
   const run = async (want) => {
@@ -432,6 +437,15 @@ test("a zero-argument program has no Arguments row, and loading an example drops
   await fresh(`?args=${encodeURIComponent('{"name":"x"}')}`);
   assert.equal(await page.eval(`document.getElementById("args").hidden`), true);
   assert.match(await page.text("#output"), /Hello from Bynk!/);
+
+  share.store.set("greet4", GREET);
+  await fresh(`?s=greet4&args=${encodeURIComponent(JSON.stringify({ name: "Ada", times: "2", tag: "x" }))}`);
+  await page.waitFor(`/Ada x2 #x/.test(document.getElementById("output").textContent)`, "the run with link arguments");
+  await page.click("#examples");
+  await page.click("#gallery-grid .card");
+  await settled();
+  assert.doesNotMatch(await page.eval(`location.search`), /args/);
+  assert.equal(await page.eval(`document.getElementById("args").hidden`), true);
 });
 
 test("when the code runner can't load, the page says so and can try again", { skip }, async () => {

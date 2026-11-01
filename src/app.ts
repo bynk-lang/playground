@@ -618,6 +618,16 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
   }
 
   const { call, error: argError } = readCall();
+  // A run nobody asked for (a link opened, an example loaded) waits for the arguments
+  // rather than reporting fields the user hasn't had a chance to fill in. (A type that
+  // can't be entered at all is still said at once: filling in won't help.)
+  const fillable = signature.kind === "params" && signature.params.every((p) => p.input !== null);
+  if (argError && !remember && fillable) {
+    lastNote = "Fill in the arguments above, then press Run.";
+    renderOutput();
+    setStatus("needs arguments");
+    return { compiled: true, error: argError };
+  }
   if (argError) {
     lastReply = { kind: "bynk-result", id, logs: [], argError };
     renderOutput();
