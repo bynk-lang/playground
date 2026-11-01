@@ -23,6 +23,7 @@ import { groupFiles, lineCount } from "./jsview";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
 import { BYNK_VERSION, BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
 import type { CompileResult, Diagnostic, EmittedFile, RunReply, SandboxConnect } from "./shared";
+import { hintFor, learnMoreHref } from "./diagnostics";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
 import { mountGallery } from "./gallery";
@@ -215,15 +216,44 @@ function renderDiagnostics(diags: Diagnostic[]): void {
   }
   panel.classList.remove("empty");
   for (const d of diags) {
-    const row = document.createElement("button");
-    row.type = "button";
+    // A row holds the message as a button (click to jump the cursor to the offending
+    // span), then the code as a link to its docs, and a "Try:" hint for common mistakes.
+    // The link sits beside the button, not in it: a link can't nest inside a button.
+    const row = document.createElement("div");
     row.className = `diag diag-${d.severity}`;
+    const jump = document.createElement("button");
+    jump.type = "button";
+    jump.className = "diag-jump";
     const loc = d.line ? `${d.line}:${d.col}` : "—";
-    // Click a row to jump the cursor to the offending span.
-    row.addEventListener("click", () => jumpTo(d));
-    // `category` is a fixed compiler constant today; escape it too so this stays
-    // injection-proof if a future diagnostic ever derives a category from source.
-    row.innerHTML = `<span class="diag-sev">${d.severity === "error" ? "✕ error" : "▲ warning"}</span> <span class="diag-loc">${loc}</span> ${escapeHtml(d.message)} <span class="diag-cat">${escapeHtml(d.category)}</span>`;
+    jump.addEventListener("click", () => jumpTo(d));
+    jump.innerHTML = `<span class="diag-sev">${d.severity === "error" ? "✕ error" : "▲ warning"}</span> <span class="diag-loc">${loc}</span> ${escapeHtml(d.message)}`;
+    row.appendChild(jump);
+    // `category` is a fixed compiler constant today; escape it too (textContent) so this
+    // stays injection-proof if a future diagnostic ever derives a category from source.
+    const href = learnMoreHref(d.category);
+    let cat: HTMLElement;
+    if (href) {
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.title = "What this diagnostic means, in the Bynk Book";
+      a.textContent = `${d.category} ↗`;
+      cat = a;
+    } else {
+      cat = document.createElement("span");
+      cat.textContent = d.category;
+    }
+    cat.className = "diag-cat";
+    row.appendChild(cat);
+    const hint = hintFor(d.category);
+    if (hint) {
+      const p = document.createElement("p");
+      p.className = "diag-hint";
+      // Backticks in a hint mark code.
+      p.innerHTML = `Try: ${escapeHtml(hint).replace(/`([^`]+)`/g, "<code>$1</code>")}`;
+      row.appendChild(p);
+    }
     panel.appendChild(row);
   }
 }
