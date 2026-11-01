@@ -288,6 +288,18 @@
       dialog#gallery { width: min(47.5rem, calc(100vw - 1.5rem)); }
       dialog#share-sheet { width: min(28.75rem, calc(100vw - 1.5rem)); }
       dialog#about-runs { width: min(40rem, calc(100vw - 1.5rem)); }
+      dialog#reference { width: min(44rem, calc(100vw - 1.5rem)); height: min(40rem, calc(100vh - 3rem)); }
+      #reference-search { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; min-height: 2.5rem; font: 400 0.875rem var(--font-sans);
+        background: var(--surface-panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
+      #reference-search:focus-visible { outline: 0.125rem solid var(--accent); outline-offset: 0.125rem; }
+      .reference-note { margin: 0 0 0.25rem; font-size: 0.8125rem; line-height: 1.25rem; color: var(--ink-muted); }
+      .reference-note code, .ref-group code { font: 400 0.8125rem var(--font-mono); color: var(--ink); }
+      .reference-note a { color: var(--accent); font-weight: 600; }
+      .ref-group { margin: 0 0 0.75rem; }
+      .ref-group h4 { margin: 0 0 0.25rem; font-size: 0.875rem; font-weight: 400; color: var(--ink-muted); }
+      .ref-group h4 code { font-weight: 600; margin-right: 0.25rem; }
+      .ref-group ul { margin: 0; padding-left: 1rem; list-style: none; }
+      .ref-group li { margin: 0.125rem 0; overflow-wrap: anywhere; }
       .about-body { font-size: 0.875rem; line-height: 1.375rem; }
       .about-body h3 { margin: 1rem 0 0.25rem; font-size: 0.9375rem; font-weight: 650; }
       .about-body p, .about-body ul { margin: 0 0 0.5rem; }
@@ -422,6 +434,7 @@
             <div id="learn-links">
               <span class="learn-label">Learn</span>
               <button type="button" data-about aria-haspopup="dialog">What runs here</button>
+              <button type="button" data-reference aria-haspopup="dialog">Standard library</button>
               <a href="https://bynk-lang.org/book/" target="_blank" rel="noopener">The Bynk Book ↗</a>
               <a href="https://bynk-lang.org/book/tutorials/01-first-program/" target="_blank" rel="noopener">Your first program ↗</a>
               <a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a>
@@ -573,6 +586,16 @@
             <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">Build an HTTP service ↗</a></li>
           </ul>
         </div>
+      </dialog>
+      <!-- The standard library reference (#85), read from the compiler by the app. -->
+      <dialog id="reference" class="sheet" aria-labelledby="reference-title">
+        <form method="dialog" class="gallery-head">
+          <h2 id="reference-title">Standard library</h2>
+          <button class="link" value="close" aria-label="Close standard library">Close</button>
+        </form>
+        <input id="reference-search" type="search" placeholder="Search, e.g. parse int" aria-label="Search the standard library" autocomplete="off" />
+        <p class="reference-note">Built-in types, the <code>bynk</code> capabilities and the first-party modules, read from the compiler this page runs. Use a capability with <code>consumes bynk { … }</code> and <code>given</code>; bring in a module with <code>uses</code>, e.g. <code>uses bynk.string</code>. Methods on values, such as <code>s.trim()</code> or <code>xs.fold(…)</code>, aren't listed yet: the compiler doesn't share them with the browser. <a href="https://bynk-lang.org/book/reference/types/#list-methods" target="_blank" rel="noopener">List's methods are in the Book ↗</a></p>
+        <div id="reference-list" aria-live="polite"></div>
       </dialog>
       <dialog id="gallery" class="sheet" aria-labelledby="gallery-title">
         <form method="dialog" class="gallery-head">
