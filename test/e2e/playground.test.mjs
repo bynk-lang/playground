@@ -583,7 +583,7 @@ test("on a wide screen Examples, Tour and Theme sit in the toolbar and there is 
 });
 
 // Each width is the narrowest of a --ui-scale step, where the toolbar is tightest.
-test("on a wide screen the toolbar fits one row with no button wrapped, at every scale", { skip }, async () => {
+test("on a wide screen the toolbar fits one row with no button wrapped and short statuses whole, at every scale", { skip }, async () => {
   try {
     for (const width of [801, 1000, 1400]) {
       await page.setViewport(width, 800);
@@ -593,7 +593,16 @@ test("on a wide screen the toolbar fits one row with no button wrapped, at every
       assert.equal(await page.eval(`document.documentElement.scrollWidth > innerWidth`), false, `${width}px: nothing scrolls sideways`);
       const wrapped = await page.eval(`[...document.querySelectorAll("header button")].filter((b) => b.getClientRects().length && b.offsetHeight > parseFloat(getComputedStyle(b).minHeight) + 1).map((b) => b.id)`);
       assert.deepEqual(wrapped, [], `${width}px: buttons on one line`);
+      // Run drops its shortcut hint here, so a short status is shown whole.
+      assert.equal(await page.visible("#run-key"), false, `${width}px: Run's shortcut hint gives way`);
+      for (const text of ["ran", "12 errors"]) {
+        await page.eval(`document.getElementById("status").textContent = ${JSON.stringify(text)}`);
+        assert.equal(await page.eval(`(() => { const s = document.getElementById("status"); return s.scrollWidth > s.clientWidth; })()`), false, `${width}px: "${text}" is not cut short`);
+      }
     }
+    // Away from the steps the hint is back.
+    await page.setViewport(1200, 800);
+    assert.equal(await page.visible("#run-key"), true, "1200px: Run shows its shortcut");
   } finally {
     await page.setViewport(1512, 860);
   }
