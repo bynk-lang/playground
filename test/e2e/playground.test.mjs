@@ -116,6 +116,8 @@ test("Format on source it cannot parse leaves it alone and says where", { skip }
   const row = await page.text(".diag");
   assert.match(row, /Can't format: expected identifier as a record field name/);
   assert.match(row, /bynk\.format/);
+  // The formatter's failure is the playground's own, not a compiler code: no docs link, no hint.
+  assert.equal(await page.eval(`document.querySelector(".diag a, .diag-hint")`), null);
 });
 
 test("Shift+Alt+F formats from inside the editor", { skip }, async () => {
@@ -190,8 +192,34 @@ test("a broken program shows the error and does not run", { skip }, async () => 
   await page.click("#run");
   await page.waitFor(`/error/.test(document.getElementById("status").textContent)`, "error status");
   assert.match(await page.text("#diag-summary"), /✕ \d+ error/);
-  assert.equal(await page.eval(`document.querySelector(".diag")?.tagName`), "BUTTON");
+  assert.equal(await page.eval(`document.querySelector(".diag .diag-jump")?.tagName`), "BUTTON");
   assert.match(await page.text("#output"), /Fix the \d+ errors? above/);
+});
+
+test("a diagnostic links its code to the Book, hints at a fix, and still jumps to the spot", { skip }, async () => {
+  share.store.set(
+    "nogiven",
+    'context demo.t\n\nconsumes bynk { Logger }\n\nservice s {\n\ton call() -> Effect[String] {\n\t\tlet _ <- Logger.info("hi")\n\t\t"x"\n\t}\n}\n',
+  );
+  await fresh("?s=nogiven");
+  await page.click("#run");
+  await page.waitFor(`document.querySelector(".diag")`, "a diagnostic row");
+  const link = await page.eval(`(() => {
+    const a = document.querySelector(".diag a.diag-cat");
+    return a && { text: a.textContent, href: a.href, target: a.target, inButton: !!a.closest("button") };
+  })()`);
+  assert.deepEqual(link, {
+    text: "bynk.given.undeclared_capability ↗",
+    href: "https://bynk-lang.org/book/reference/diagnostics/#given-capabilities",
+    target: "_blank",
+    inButton: false,
+  });
+  assert.match(await page.text(".diag-hint"), /^Try: List the capability after given/);
+  assert.equal(await page.eval(`document.querySelector(".diag-hint code")?.textContent`), "given");
+
+  // The message is still a button that puts the cursor on the offending line.
+  await page.click(".diag-jump");
+  assert.match(await page.text(".cm-activeLine"), /Logger\.info/);
 });
 
 test("the result tabs: Logs counts lines, arrow keys move between tabs", { skip }, async () => {
