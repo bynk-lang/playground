@@ -55,6 +55,9 @@ const IS_APPLE = [(navigator as Navigator & { userAgentData?: { platform?: strin
   .some((p) => p && /mac|iphone|ipad/i.test(p));
 const PLATFORM_LOCK = new Set(["bynk.target.vendor_required", "bynk.target.browser_bundle_only"]);
 
+// The message the browser binding throws for a capability it withholds (Fetch, Secrets).
+const WITHHELD = /is unavailable in the browser playground/;
+
 const $ = (id: string) => document.getElementById(id)!;
 
 let view: EditorView;
@@ -371,7 +374,10 @@ function renderOutput(): void {
     line.className = cls;
     line.textContent = text;
     out.appendChild(line);
+    return line;
   };
+  // A limit message ends with a way to read why the limit is there (#81).
+  const whyNote = (text: string) => add("out-note", `${text} `).appendChild(aboutButton("Why?"));
   const logs = lastReply?.logs ?? [];
   const badge = $("logs-badge");
   badge.hidden = logs.length === 0;
@@ -442,16 +448,18 @@ function renderOutput(): void {
   // Result tab.
   if (reply.timedOut) {
     add("out-error", `✕ Execution exceeded ${RUN_TIMEOUT_MS} ms and was terminated.`);
-    add("out-note", "Check for a loop that never returns.");
+    whyNote("Check for a loop that never returns.");
     if (logs.length > 0) add("out-note", `It logged ${logs.length} line${logs.length === 1 ? "" : "s"} first: see the Logs tab.`);
     return;
   }
   if (reply.noEntry) {
-    add("out-note", "Compiled. No zero-argument service handler to run: add `on call() -> …` to see output.");
+    whyNote("Compiled. No zero-argument service handler to run: add `on call() -> …` to see output.");
     return;
   }
   if (reply.error) {
     add("out-error", `✕ ${reply.error}`);
+    // Fetch and Secrets compile but are withheld in the browser: their binding throws.
+    if (WITHHELD.test(reply.error)) whyNote("This capability isn't available in the browser.");
   } else if (reply.value !== undefined) {
     add("out-value", `⇒ ${reply.value}`);
   } else {
@@ -464,7 +472,8 @@ function showUnsupported(diags: Diagnostic[]): void {
   const lock = diags.find((d) => PLATFORM_LOCK.has(d.category));
   const banner = $("unsupported");
   if (lock) {
-    banner.textContent = `Not runnable in-browser: ${lock.message}`;
+    banner.textContent = `Not runnable in-browser: ${lock.message} `;
+    banner.appendChild(aboutButton("What runs here?"));
     banner.hidden = false;
   } else {
     banner.hidden = true;
@@ -613,11 +622,11 @@ function mountLearn(): void {
   const isOpen = () => learn.hasAttribute("data-open");
   button.addEventListener("click", () => {
     setOpen(!isOpen());
-    if (isOpen()) learn.querySelector<HTMLElement>("a")?.focus();
+    if (isOpen()) $("learn-links").querySelector<HTMLElement>("a, button")?.focus();
   });
-  // Following a link (it opens in a new tab) closes the dropdown behind it.
+  // Following a link (it opens in a new tab), or opening What runs here, closes the dropdown behind it.
   $("learn-links").addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest("a")) setOpen(false);
+    if ((e.target as HTMLElement).closest("a, button")) setOpen(false);
   });
   document.addEventListener("click", (e) => {
     if (isOpen() && !(e.target as HTMLElement).closest("#learn")) setOpen(false);
@@ -629,6 +638,25 @@ function mountLearn(): void {
     }
   });
   matchMedia("(max-width: 800px)").addEventListener("change", () => setOpen(false));
+}
+
+// What the playground can run (#81): a dialog any `[data-about]` button opens, and the
+// limit messages carry such a button of their own.
+function aboutButton(text: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "link";
+  button.dataset.about = "";
+  button.setAttribute("aria-haspopup", "dialog");
+  button.textContent = text;
+  return button;
+}
+
+function mountAbout(): void {
+  const dialog = $("about-runs") as HTMLDialogElement;
+  document.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("[data-about]") && !dialog.open) dialog.showModal();
+  });
 }
 
 function mountTheme(): void {
@@ -1260,6 +1288,7 @@ async function main(): Promise<void> {
   mountTheme();
   mountMenu();
   mountLearn();
+  mountAbout();
   showCoach();
   renderOutput();
   const t0 = initialTourIndex();
