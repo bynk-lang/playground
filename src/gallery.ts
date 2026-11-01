@@ -2,7 +2,7 @@
 // Each card shows what the example teaches and a peek at the code; picking one hands
 // it back to the app, which loads and runs it.
 
-import { EXAMPLES } from "./examples";
+import { EXAMPLES, GROUPS } from "./examples";
 import type { Example } from "./examples";
 import type { RecentSnippet } from "./store";
 
@@ -30,6 +30,9 @@ export function mountGallery(opts: {
   currentId: () => string | null;
   recent: () => RecentSnippet[];
   onPickRecent: (r: RecentSnippet) => void;
+  /// The title of the tour step with this id, for the link under an example's card.
+  tourStep: (id: string) => { title: string; number: number } | null;
+  onTour: (id: string) => void;
 }): void {
   const dialog = document.getElementById("gallery") as HTMLDialogElement;
   const search = document.getElementById("gallery-search") as HTMLInputElement;
@@ -57,24 +60,56 @@ export function mountGallery(opts: {
     return card;
   };
 
+  // The examples by section, in reading order (#84); a search hides the sections it empties.
   const render = (): void => {
     const q = search.value.trim().toLowerCase();
     const current = opts.currentId();
     grid.textContent = "";
     const matches = EXAMPLES.filter((e) => !q || `${e.title} ${e.blurb}`.toLowerCase().includes(q));
-    for (const ex of matches) {
-      const card = makeCard(ex.title, ex.blurb, ex.source, () => {
-        dialog.close();
-        opts.onPick(ex);
-      });
-      if (ex.id === current) {
-        card.setAttribute("aria-current", "true");
-        const tag = document.createElement("div");
-        tag.className = "card-current";
-        tag.textContent = "✓ Current";
-        card.append(tag);
+    for (const group of GROUPS) {
+      const inGroup = matches.filter((e) => e.group === group);
+      if (inGroup.length === 0) continue;
+      const section = document.createElement("section");
+      section.className = "gallery-group";
+      const heading = document.createElement("h3");
+      heading.className = "recent-title";
+      heading.textContent = group;
+      const cards = document.createElement("div");
+      cards.className = "gallery-grid";
+      section.append(heading, cards);
+      for (const ex of inGroup) {
+        const card = makeCard(ex.title, ex.blurb, ex.source, () => {
+          dialog.close();
+          opts.onPick(ex);
+        });
+        if (ex.id === current) {
+          card.setAttribute("aria-current", "true");
+          const tag = document.createElement("div");
+          tag.className = "card-current";
+          tag.textContent = "✓ Current";
+          card.append(tag);
+        }
+        // The tour step that teaches the same idea: a button beside the card, since a
+        // button can't hold another.
+        const step = ex.tour ? opts.tourStep(ex.tour) : null;
+        if (!step) {
+          cards.append(card);
+          continue;
+        }
+        const wrap = document.createElement("div");
+        wrap.className = "card-wrap";
+        const practise = document.createElement("button");
+        practise.type = "button";
+        practise.className = "link card-tour";
+        practise.textContent = `Practise this in the tour (step ${step.number}) ›`;
+        practise.addEventListener("click", () => {
+          dialog.close();
+          opts.onTour(ex.tour!);
+        });
+        wrap.append(card, practise);
+        cards.append(wrap);
       }
-      grid.append(card);
+      grid.append(section);
     }
     const recents = opts.recent().filter((r) => !q || contextName(r.src).toLowerCase().includes(q));
     recentGrid.textContent = "";

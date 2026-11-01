@@ -545,6 +545,41 @@ test("the examples gallery searches and loads an example", { skip }, async () =>
   assert.equal(await page.eval(`document.activeElement.id`), "examples", "focus returns to the Examples button");
 });
 
+test("the gallery reads in sections from a starting point, and examples and tour steps link to each other", { skip }, async () => {
+  await fresh();
+  await page.click("#examples");
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#gallery-grid .gallery-group > h3")].map((h) => h.textContent)`), [
+    "Start here",
+    "Data types",
+    "Functions and collections",
+    "Missing values and errors",
+  ]);
+  assert.equal(await page.eval(`document.querySelector("#gallery-grid .card-title").textContent`), "Hello, world");
+
+  // An example → the tour step for the same idea.
+  const practise = await page.eval(`(() => {
+    const card = [...document.querySelectorAll("#gallery-grid .card")].find((c) => c.querySelector(".card-title").textContent === "Records");
+    return card.parentElement.querySelector(".card-tour").textContent;
+  })()`);
+  assert.equal(practise, "Practise this in the tour (step 3) ›");
+  await page.eval(`[...document.querySelectorAll("#gallery-grid .card")].find((c) => c.querySelector(".card-title").textContent === "Records").parentElement.querySelector(".card-tour").click()`);
+  await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 3 of")`, "tour step 3");
+  assert.equal(await page.eval(`document.getElementById("gallery").open`), false);
+
+  // The tour step → its example, leaving the tour.
+  assert.equal(await page.text("#tour-example"), "See a full example: Records ›");
+  await page.click("#tour-example");
+  await settled();
+  assert.equal(await page.eval(`document.getElementById("tour").hidden`), true);
+  assert.match(await page.editor(), /context demo\.records/);
+  await page.click("#examples");
+  assert.match(await page.eval(`document.querySelector('#gallery-grid .card[aria-current="true"] .card-title').textContent`), /Records/);
+
+  // Searching hides the sections it empties.
+  await page.eval(`(() => { const s = document.getElementById("gallery-search"); s.value = "maps"; s.dispatchEvent(new Event("input")); })()`);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#gallery-grid .gallery-group > h3")].map((h) => h.textContent)`), ["Functions and collections"]);
+});
+
 test("the gallery points to the Book for what a playground file can't hold", { skip }, async () => {
   await fresh();
   await page.click("#examples");

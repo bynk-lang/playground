@@ -30,3 +30,21 @@ for (const example of EXAMPLES) {
     assert.equal(r.error, undefined, `the handler threw: ${r.error}`);
   });
 }
+
+// The gallery's order (#84): sections in GROUPS order, each example in one, and the
+// tour links pointing at real steps, every step with an example of its own.
+test("examples are grouped in reading order and linked to the tour", async () => {
+  const { GROUPS } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+  assert.equal(EXAMPLES[0].group, GROUPS[0], "the opening program is the first thing to read");
+  const order = EXAMPLES.map((e) => GROUPS.indexOf(e.group));
+  assert.ok(order.every((g) => g >= 0), "every example is in a known group");
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), "EXAMPLES lists the groups in order");
+  for (const g of GROUPS) assert.ok(EXAMPLES.some((e) => e.group === g), `${g} has examples`);
+
+  const tourSrc = await readFile(new URL("../src/tour.ts", import.meta.url), "utf8");
+  const tourJs = (await transform(tourSrc, { loader: "ts", format: "esm" })).code;
+  const { TOUR } = await import(`data:text/javascript;base64,${Buffer.from(tourJs).toString("base64")}`);
+  const ids = TOUR.map((s) => s.id);
+  for (const e of EXAMPLES) if (e.tour) assert.ok(ids.includes(e.tour), `${e.id} links to a real step`);
+  for (const id of ids) assert.ok(EXAMPLES.some((e) => e.tour === id), `tour step ${id} has an example`);
+});

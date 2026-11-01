@@ -1073,6 +1073,11 @@ function mountExamples(): void {
       currentExampleId = null;
       loadSnippet(r.src);
     },
+    tourStep: (id) => {
+      const i = TOUR.findIndex((s) => s.id === id);
+      return i === -1 ? null : { title: TOUR[i].title, number: i + 1 };
+    },
+    onTour: (id) => showTourStep(TOUR.findIndex((s) => s.id === id)),
   });
 }
 
@@ -1136,6 +1141,9 @@ function showTourStep(i: number, fresh = true): void {
   $("tour-title").textContent = step.title;
   renderProse($("tour-prose"), step.prose);
   renderProse($("tour-task"), step.task);
+  const example = EXAMPLES.find((e) => e.tour === step.id);
+  $("tour-example-row").hidden = !example;
+  if (example) $("tour-example").textContent = `See a full example: ${example.title} ›`;
   setTourFeedback(doneBefore ? "✓ You passed this step earlier." : "", doneBefore ? "ok" : "idle");
   tourDone = doneBefore;
   ($("tour-next") as HTMLButtonElement).disabled = !doneBefore;
@@ -1220,6 +1228,15 @@ function mountTour(): void {
   $("tour-exit").addEventListener("click", () => exitTour(true));
   $("tour-check").addEventListener("click", () => void checkTour());
   $("tour-next").addEventListener("click", nextTour);
+  // The matching gallery example: leave the tour (its progress is kept) and load it.
+  $("tour-example").addEventListener("click", () => {
+    const step = tourStep();
+    const example = step && EXAMPLES.find((e) => e.tour === step.id);
+    if (!example) return;
+    exitTour();
+    currentExampleId = example.id;
+    loadSnippet(example.source);
+  });
   $("tour-solution").addEventListener("click", () => {
     const step = tourStep();
     if (step) setEditorContent(step.solution);

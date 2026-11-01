@@ -359,6 +359,12 @@
       .card-blurb { color: var(--ink-muted); }
       .card-peek { margin: 0.5rem 0 0; font: 400 0.75rem/1.125rem var(--font-mono); color: var(--ink); white-space: pre; overflow: hidden; }
       .card-current { color: var(--accent); font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem; }
+      .gallery-group:first-child .recent-title { margin-top: 0.25rem; }
+      .tour-example { margin: 0 0 0.5rem; font-size: 0.875rem; }
+      .tour-example button.link { padding: 0; min-height: 0; font-size: inherit; }
+      .card-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
+      .card-wrap .card { flex: 1; }
+      .card-tour { align-self: flex-start; font-size: 0.8125rem; }
 
       /* Narrow screens: stack the panes */
       @media (max-width: 800px) {
@@ -475,6 +481,10 @@
           <h2 id="tour-title"></h2>
           <p id="tour-prose"></p>
           <p class="tour-task" id="tour-task"></p>
+          <!-- The gallery example for the same idea (#84); leaving keeps the tour's progress. -->
+          <p class="tour-example" id="tour-example-row" hidden>
+            <button id="tour-example" class="link" title="Leaves the tour; your progress is kept"></button>
+          </p>
           <p id="tour-feedback" role="status" aria-live="polite"></p>
           <div class="tour-actions">
             <button id="tour-check" class="primary">Check</button>
@@ -570,7 +580,7 @@
           <button class="link" value="close" aria-label="Close examples">Close</button>
         </form>
         <input id="gallery-search" type="search" placeholder="Search examples" aria-label="Search examples" autocomplete="off" />
-        <div id="gallery-grid" class="gallery-grid"></div>
+        <div id="gallery-grid"></div>
         <div id="recent-section" hidden>
           <h3 class="recent-title">Recent</h3>
           <div id="recent-grid" class="gallery-grid"></div>
