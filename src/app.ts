@@ -580,7 +580,7 @@ function mountLearn(): void {
   });
   // Following a link (it opens in a new tab) closes the dropdown behind it.
   $("learn-links").addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest("a")) setOpen(false);
+    if ((e.target as HTMLElement).closest("a, button")) setOpen(false);
   });
   document.addEventListener("click", (e) => {
     if (isOpen() && !(e.target as HTMLElement).closest("#learn")) setOpen(false);
@@ -1178,6 +1178,11 @@ async function main(): Promise<void> {
   }
   $("format").title = `Format to the house style (${IS_APPLE ? "⌥⇧F" : "Shift+Alt+F"})`;
   $("format").addEventListener("click", formatSource);
+  const shortcutsDialog = $("shortcuts-sheet") as HTMLDialogElement;
+  const openShortcuts = (): void => {
+    if (!shortcutsDialog.open) shortcutsDialog.showModal();
+  };
+  $("shortcuts-btn").addEventListener("click", openShortcuts);
   $("run").addEventListener("click", () => void compileAndRun(true));
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
@@ -1201,6 +1206,14 @@ async function main(): Promise<void> {
   selectTab("result");
   // Run from anywhere, not only inside the editor.
   document.addEventListener("keydown", (e) => {
+    const target = e.target as HTMLElement;
+    if (
+      e.key === "?" && !e.defaultPrevented &&
+      !target.closest(".cm-editor, input, textarea, select, [contenteditable='true'], dialog")
+    ) {
+      e.preventDefault();
+      openShortcuts();
+    }
     // Format from anywhere too (inside the editor the keymap above handles it).
     if (e.altKey && e.shiftKey && e.code === "KeyF" && !(e.target as HTMLElement).closest(".cm-editor")) {
       e.preventDefault();
