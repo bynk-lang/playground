@@ -373,6 +373,86 @@ function selectTab(tab: Tab): void {
   renderOutput();
 }
 
+// The compiled JavaScript, into `out`. The Compiled JS tab and the column beside the
+// editor (#87) both show it.
+function renderJs(out: HTMLElement): void {
+  if (lastFiles.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "out-empty";
+    empty.textContent = "Nothing compiled yet. Press Run to see the JavaScript Bynk emits.";
+    out.appendChild(empty);
+    return;
+  }
+  // The program's own modules first; the composition root and the runtime and
+  // bindings (most of the output) one click away (#14).
+  const view = groupFiles(lastFiles);
+  const files = (to: HTMLElement, list: EmittedFile[]) => {
+    for (const f of list) {
+      for (const [cls, text] of [["out-file", `// ${f.path}`], ["out-code", f.contents]]) {
+        const line = document.createElement("div");
+        line.className = cls;
+        line.textContent = text;
+        to.appendChild(line);
+      }
+    }
+  };
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const section = (key: keyof typeof jsOpen, list: EmittedFile[], label: string) => {
+    if (list.length === 0) return;
+    const box = document.createElement("details");
+    box.className = "out-section";
+    box.dataset.kind = key;
+    box.open = jsOpen[key];
+    box.addEventListener("toggle", () => (jsOpen[key] = box.open));
+    const summary = document.createElement("summary");
+    summary.textContent = `${label} · ${plural(list.length, "file")}, ${plural(lineCount(list), "line")}`;
+    box.appendChild(summary);
+    files(box, list);
+    out.appendChild(box);
+  };
+  files(out, view.user);
+  section("wiring", view.wiring, "Composition root");
+  section("support", view.support, "Runtime and bindings");
+}
+
+// The compiled JavaScript in a column of its own between the editor and the results (#87),
+// on a screen wide enough for three (the CSS hides it, and shows the tab again, below
+// that). Kept per browser.
+const WIDE_ENOUGH = matchMedia("(min-width: 1200px)");
+let jsBeside = (() => {
+  try {
+    return localStorage.getItem("bynk-js-beside") === "1";
+  } catch {
+    return false;
+  }
+})();
+
+function renderJsPane(): void {
+  const body = $("js-pane-body");
+  if (!jsBeside) {
+    body.innerHTML = "";
+    return;
+  }
+  // Re-rendered after every run: keep the reader's place.
+  const top = body.scrollTop;
+  body.innerHTML = "";
+  renderJs(body);
+  body.scrollTop = top;
+}
+
+function setJsBeside(on: boolean): void {
+  jsBeside = on;
+  document.querySelector("main")!.toggleAttribute("data-js-beside", on);
+  try {
+    localStorage.setItem("bynk-js-beside", on ? "1" : "0");
+  } catch {
+    // not kept: the choice lasts this visit
+  }
+  // The JS has moved out of the tab, so show the result there; or it has come back.
+  selectTab(on ? "result" : "js");
+  if (!on) $("tab-js").focus();
+}
+
 function renderOutput(): void {
   const out = $("output");
   out.innerHTML = "";
@@ -390,41 +470,18 @@ function renderOutput(): void {
   badge.hidden = logs.length === 0;
   badge.textContent = String(logs.length);
 
+  renderJsPane();
   if (activeTab === "js") {
-    if (lastFiles.length === 0) {
-      add("out-empty", "Nothing compiled yet. Press Run to see the JavaScript Bynk emits.");
-      return;
-    }
-    // The program's own modules first; the composition root and the runtime and
-    // bindings (most of the output) one click away (#14).
-    const view = groupFiles(lastFiles);
-    const files = (to: HTMLElement, list: EmittedFile[]) => {
-      for (const f of list) {
-        for (const [cls, text] of [["out-file", `// ${f.path}`], ["out-code", f.contents]]) {
-          const line = document.createElement("div");
-          line.className = cls;
-          line.textContent = text;
-          to.appendChild(line);
-        }
-      }
-    };
-    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-    const section = (key: keyof typeof jsOpen, list: EmittedFile[], label: string) => {
-      if (list.length === 0) return;
-      const box = document.createElement("details");
-      box.className = "out-section";
-      box.dataset.kind = key;
-      box.open = jsOpen[key];
-      box.addEventListener("toggle", () => (jsOpen[key] = box.open));
-      const summary = document.createElement("summary");
-      summary.textContent = `${label} · ${plural(list.length, "file")}, ${plural(lineCount(list), "line")}`;
-      box.appendChild(summary);
-      files(box, list);
-      out.appendChild(box);
-    };
-    files(out, view.user);
-    section("wiring", view.wiring, "Composition root");
-    section("support", view.support, "Runtime and bindings");
+    // On a wide screen the JS can sit in a column of its own beside the editor (#87).
+    const beside = document.createElement("button");
+    beside.type = "button";
+    beside.id = "js-beside";
+    beside.className = "link";
+    beside.textContent = "Show beside the editor ⇥";
+    beside.title = "Read the JavaScript next to the Bynk, with the result still in view";
+    beside.addEventListener("click", () => setJsBeside(true));
+    out.appendChild(beside);
+    renderJs(out);
     return;
   }
 
@@ -1519,6 +1576,13 @@ async function main(): Promise<void> {
   mountMenu();
   mountLearn();
   mountAbout();
+  document.querySelector("main")!.toggleAttribute("data-js-beside", jsBeside);
+  $("js-pane-close").addEventListener("click", () => setJsBeside(false));
+  // Widened to three columns while the JS tab was open: the JS is beside now, so the tab
+  // (hidden) gives way to the result. Narrowed: the tab is back, as it was.
+  WIDE_ENOUGH.addEventListener("change", () => {
+    if (jsBeside && WIDE_ENOUGH.matches && activeTab === "js") selectTab("result");
+  });
   mountReference();
   // Enter in an argument field runs, like the Run button.
   $("args").addEventListener("submit", (e) => {

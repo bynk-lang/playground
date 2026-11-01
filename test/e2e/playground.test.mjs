@@ -222,6 +222,48 @@ test("a diagnostic links its code to the Book, hints at a fix, and still jumps t
   assert.match(await page.text(".cm-activeLine"), /Logger\.info/);
 });
 
+test("on a wide screen the compiled JS moves beside the editor, follows each run, and stays there", { skip }, async () => {
+  await page.setViewport(1440, 900);
+  try {
+    await fresh();
+    await page.click("#tab-js");
+    assert.equal(await page.visible("#js-pane"), false);
+    await page.click("#js-beside");
+    assert.equal(await page.visible("#js-pane"), true);
+    assert.equal(await page.visible("#tab-js"), false, "the tab gives way to the column");
+    assert.equal(await page.eval(`document.querySelector("[role=tab][aria-selected=true]").id`), "tab-result");
+    assert.match(await page.text("#js-pane-body"), /\/\/ hello\/world\.js/);
+    assert.match(await page.text("#output"), /Hello from Bynk!/, "the result stays in view");
+    const x = (sel) => page.eval(`document.querySelector("${sel}").getBoundingClientRect().left`);
+    assert.ok((await x("#editor")) < (await x("#js-pane")) && (await x("#js-pane")) < (await x("#output")), "editor, JS, then the result");
+
+    // It follows the program: load another and run it.
+    await page.click("#examples");
+    await page.eval(`[...document.querySelectorAll("#gallery-grid .card")].find((c) => c.querySelector(".card-title").textContent === "Records").click()`);
+    await settled();
+    assert.match(await page.text("#js-pane-body"), /\/\/ demo\/records\.js/);
+
+    // Kept for the next visit.
+    await page.goto(app.url);
+    await settled();
+    assert.equal(await page.visible("#js-pane"), true);
+
+    // Too narrow for three columns: the tab is back, and the column is gone.
+    await page.setViewport(1000, 800);
+    assert.equal(await page.visible("#js-pane"), false);
+    assert.equal(await page.visible("#tab-js"), true);
+    await page.setViewport(1440, 900);
+
+    // Back to the tab.
+    await page.click("#js-pane-close");
+    assert.equal(await page.visible("#js-pane"), false);
+    assert.equal(await page.eval(`document.activeElement.id`), "tab-js");
+    assert.match(await page.text("#output"), /\/\/ demo\/records\.js|\/\/ hello\/world\.js/);
+  } finally {
+    await page.setViewport(1512, 860);
+  }
+});
+
 test("the result tabs: Logs counts lines, arrow keys move between tabs", { skip }, async () => {
   await fresh();
   assert.equal(await page.text("#logs-badge"), "1");
