@@ -167,6 +167,20 @@
 
       /* Panes */
       main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; min-height: 0; }
+      /* The compiled JS beside the editor (#87): a third column on a screen wide enough
+         for one; the tab, and the button that moves it out, only below that. */
+      #js-pane { display: none; }
+      #js-pane .pane-head { justify-content: space-between; }
+      #js-pane .pane-head button.link { min-height: 0; padding: 0; font-size: 0.8125rem; text-transform: none; letter-spacing: 0; }
+      #js-pane-body { padding: 0.75rem; overflow: auto; min-height: 0; font: 400 0.8125rem/1.375rem var(--font-mono); white-space: pre-wrap; }
+      #js-pane-body:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+      #js-beside { display: none; margin-bottom: 0.5rem; padding: 0; min-height: 0; font: 600 0.8125rem var(--font-sans); }
+      @media (min-width: 1200px) {
+        #js-beside { display: inline; }
+        main[data-js-beside] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.7fr); }
+        main[data-js-beside] #js-pane { display: grid; }
+        main[data-js-beside] #tab-js { display: none; }
+      }
       .pane { display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--surface-panel);
         border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
       .pane-head { display: flex; gap: 1rem; align-items: center; padding: 0 0.75rem; min-height: 2.5rem;
@@ -245,7 +259,7 @@
       .out-log { color: var(--ink); } .out-error { color: var(--danger); }
       .out-value { color: var(--accent); font-weight: 600; margin-top: 0.5rem; }
       .out-note, .out-empty { color: var(--ink-muted); font-family: var(--font-sans); font-size: 0.875rem; }
-      .out-code { color: var(--ink); white-space: pre; }
+      .out-code { color: var(--ink); white-space: pre; tab-size: 2; }
       .out-file { color: var(--ink-muted); margin-top: 0.75rem; }
       .out-file:first-child { margin-top: 0; }
       .out-section { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 0.5rem; }
@@ -487,6 +501,14 @@
             <span id="diag-summary"></span>
           </div>
           <div id="editor"></div>
+        </section>
+        <!-- The compiled JS beside the editor on a wide screen (#87), filled by the app. -->
+        <section id="js-pane" class="pane" aria-label="Compiled JS">
+          <div class="pane-head">
+            <span>Compiled JS</span>
+            <button id="js-pane-close" class="link" title="Put the JavaScript back in its tab">Back to the tab</button>
+          </div>
+          <div id="js-pane-body" tabindex="0"></div>
         </section>
         <div id="right">
         <section id="tour" class="tour" aria-label="Guided tour" hidden>
