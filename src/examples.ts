@@ -238,6 +238,87 @@ service run {
 `,
   },
   {
+    id: "strings",
+    title: "Strings",
+    blurb: "Trim, split, change case and join text with String's methods.",
+    source: `context demo.strings
+
+fn initials(name: String) -> String {
+	name.split(" ").map((w) => w.slice(0, 1).toUpper()).fold("", (acc, c) => acc.concat(c))
+}
+
+service text {
+	on call() -> Effect[String] {
+		let name = "  ada lovelace  ".trim()
+		let shout = name.toUpper()
+		shout.concat(" (").concat(initials(name)).concat(")")
+	}
+}
+`,
+  },
+  {
+    id: "maps",
+    title: "Maps",
+    blurb: "Count words into a Map, then look one up.",
+    source: `context demo.maps
+
+consumes bynk { Logger }
+
+fn bump(counts: Map[String, Int], word: String) -> Map[String, Int] {
+	match counts.get(word) {
+		Some(n) => counts.insert(word, n + 1),
+		None => counts.insert(word, 1),
+	}
+}
+
+fn tally(words: List[String]) -> Map[String, Int] {
+	let empty: Map[String, Int] = Map.empty()
+	words.fold(empty, bump)
+}
+
+service count {
+	on call() -> Effect[Int] given Logger {
+		let counts = tally(["red", "blue", "red", "green", "red"])
+		let _ <- Logger.info("colours seen: ".concat(counts.keys().length().toString()))
+		match counts.get("red") {
+			Some(n) => n,
+			None => 0,
+		}
+	}
+}
+`,
+  },
+  {
+    id: "recursion",
+    title: "Recursion",
+    blurb: "A function that calls itself, and a type whose cases hold more of itself.",
+    source: `context demo.recursion
+
+type Expr =
+	| Num(n: Int)
+	| Add(a: Expr, b: Expr)
+	| Mul(a: Expr, b: Expr)
+
+fn eval(e: Expr) -> Int {
+	match e {
+		Num(n) => n,
+		Add(a, b) => eval(a) + eval(b),
+		Mul(a, b) => eval(a) * eval(b),
+	}
+}
+
+fn factorial(n: Int) -> Int {
+	if n <= 1 { 1 } else { n * factorial(n - 1) }
+}
+
+service calc {
+	on call() -> Effect[Int] {
+		eval(Add(Num(factorial(3)), Mul(Num(2), Num(10))))
+	}
+}
+`,
+  },
+  {
     id: "plain",
     title: "No capabilities",
     blurb: "A service that asks for nothing: no consumes, no given.",

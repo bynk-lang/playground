@@ -545,6 +545,22 @@ test("the examples gallery searches and loads an example", { skip }, async () =>
   assert.equal(await page.eval(`document.activeElement.id`), "examples", "focus returns to the Examples button");
 });
 
+test("the gallery points to the Book for what a playground file can't hold", { skip }, async () => {
+  await fresh();
+  await page.click("#examples");
+  assert.equal(await page.visible("#beyond"), true);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("#beyond a")].map((a) => [a.textContent, a.href, a.target])`), [
+    ["An HTTP service ↗", "https://bynk-lang.org/book/tutorials/02-http-service/", "_blank"],
+    ["Testing ↗", "https://bynk-lang.org/book/tutorials/06-testing/", "_blank"],
+    ["Modules and several contexts ↗", "https://bynk-lang.org/book/guides/program-structure/how-a-program-is-shaped/", "_blank"],
+  ]);
+  // The new examples are there to search for.
+  for (const [q, id] of [["maps", "Maps"], ["recursion", "Recursion"], ["strings", "Strings"]]) {
+    await page.eval(`(() => { const s = document.getElementById("gallery-search"); s.value = ${JSON.stringify(q)}; s.dispatchEvent(new Event("input")); })()`);
+    assert.ok((await page.eval(`[...document.querySelectorAll("#gallery-grid .card-title")].map((t) => t.textContent)`)).includes(id), id);
+  }
+});
+
 test("the tour: a wrong answer gets a hint, the solution passes, progress is remembered", { skip }, async () => {
   await fresh();
   await page.click("#tour-btn");
