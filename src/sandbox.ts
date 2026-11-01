@@ -46,7 +46,7 @@ function importsOf(contents: string): string[] {
  * relative specifiers to the already-created blob URLs of its targets. (Workers
  * don't support import maps, so specifier rewriting is the portable approach.)
  */
-function linkGraph(files: EmittedFile[]): { entry: string | null; kind: EntryKind; urls: string[] } {
+function linkGraph(files: EmittedFile[]): { entry: string | null; kind: EntryKind; context: string | null; urls: string[] } {
   const byPath = new Map<string, EmittedFile>();
   for (const f of files) byPath.set(f.path, f);
 
@@ -78,7 +78,14 @@ function linkGraph(files: EmittedFile[]): { entry: string | null; kind: EntryKin
 
   for (const f of files) build(f.path);
   const picked = pickEntry(files);
-  return { entry: picked ? blobUrls.get(picked.path)! : null, kind: picked?.kind ?? "compose", urls: created };
+  // The context module, whose exported refinement types check a run's arguments (#82).
+  const context = files.find((f) => /export function __makeSurface\(/.test(f.contents));
+  return {
+    entry: picked ? blobUrls.get(picked.path)! : null,
+    kind: picked?.kind ?? "compose",
+    context: context ? blobUrls.get(context.path)! : null,
+    urls: created,
+  };
 }
 
 // The Worker bootstrap (a classic script, instantiated from a blob): imports the linked
@@ -96,7 +103,7 @@ console.info = console.log;
 console.error = (...a) => log("error", a);
 console.warn = console.error;
 self.onmessage = async (e) => {
-  const { entryUrl, kind } = e.data;
+  const { entryUrl, kind, contextUrl, call } = e.data;
   try {
     const mod = await import(entryUrl);
     // A program with capabilities enters through compose.js; one without has no
@@ -107,6 +114,34 @@ self.onmessage = async (e) => {
       return;
     }
     const app = make();
+    // Arguments (#82): call the named service's handler with them, after each has passed
+    // its refinements, checked with the compiled type's own \`of\`.
+    if (call) {
+      const ctx = contextUrl ? await import(contextUrl) : {};
+      for (let i = 0; i < call.checks.length; i++) {
+        for (const t of call.checks[i].refines) {
+          const r = ctx[t] && typeof ctx[t].of === "function" ? ctx[t].of(call.args[i]) : null;
+          if (r && r.tag === "Err") {
+            const why = (r.error && r.error.message) || "is not a valid " + t;
+            self.postMessage({ done: true, argError: "\`" + call.checks[i].name + "\` " + why + " (" + t + ")" });
+            return;
+          }
+        }
+      }
+      let fn = null;
+      for (const ctxKey of Object.keys(app)) {
+        const surface = app[ctxKey];
+        if (surface && typeof surface === "object" && typeof surface[call.service] === "function") fn = surface[call.service];
+      }
+      if (!fn) { self.postMessage({ done: true, noEntry: true }); return; }
+      if (fn.length !== call.args.length) {
+        self.postMessage({ done: true, argError: "the handler takes " + fn.length + " argument(s), but the Arguments row read " + call.args.length });
+        return;
+      }
+      const value = await fn(...call.args);
+      self.postMessage({ done: true, value: value === undefined ? undefined : fmt(value) });
+      return;
+    }
     let invoked = false, value;
     for (const ctxKey of Object.keys(app)) {
       const surface = app[ctxKey];
@@ -147,11 +182,13 @@ function run(req: RunRequest): void {
   stopActive = null;
   let entry: string | null;
   let kind: EntryKind = "compose";
+  let context: string | null = null;
   let urls: string[] = [];
   try {
     const linked = linkGraph(req.files);
     entry = linked.entry;
     kind = linked.kind;
+    context = linked.context;
     urls = linked.urls;
   } catch (err) {
     reply({ kind: "bynk-result", id: req.id, logs: [], error: `link error: ${String(err)}` });
@@ -202,6 +239,7 @@ function run(req: RunRequest): void {
       value?: string;
       error?: string;
       noEntry?: boolean;
+      argError?: string;
     };
     if (d.log) {
       logs.push(d.log.level, d.log.message);
@@ -219,6 +257,7 @@ function run(req: RunRequest): void {
       value: d.value,
       error: d.error,
       noEntry: d.noEntry,
+      argError: d.argError,
     });
   };
   worker.onerror = (e: ErrorEvent) => {
@@ -231,7 +270,7 @@ function run(req: RunRequest): void {
   };
 
   stopActive = stop;
-  worker.postMessage({ entryUrl: entry, kind });
+  worker.postMessage({ entryUrl: entry, kind, contextUrl: context, call: req.call });
 }
 
 window.addEventListener("message", (e: MessageEvent) => {

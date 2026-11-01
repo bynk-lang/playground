@@ -22,7 +22,9 @@ import { bynkTreeSitterHighlighting } from "./tshighlight";
 import { groupFiles, lineCount } from "./jsview";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
 import { BYNK_VERSION, BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
-import type { CompileResult, Diagnostic, EmittedFile, RunReply, SandboxConnect } from "./shared";
+import type { CompileResult, Diagnostic, EmittedFile, RunCall, RunReply, SandboxConnect } from "./shared";
+import { decodeArgs, encodeArgs, entrySignature, readArg } from "./args";
+import type { EntrySignature, FieldValue } from "./args";
 import { hintFor, learnMoreHref } from "./diagnostics";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
@@ -446,6 +448,11 @@ function renderOutput(): void {
     return;
   }
   // Result tab.
+  if (reply.argError) {
+    add("out-error", `✕ Can't call the handler: ${reply.argError}.`);
+    whyNote("Change the value under Arguments, then run again.");
+    return;
+  }
   if (reply.timedOut) {
     add("out-error", `✕ Execution exceeded ${RUN_TIMEOUT_MS} ms and was terminated.`);
     whyNote("Check for a loop that never returns.");
@@ -453,7 +460,7 @@ function renderOutput(): void {
     return;
   }
   if (reply.noEntry) {
-    whyNote("Compiled. No zero-argument service handler to run: add `on call() -> …` to see output.");
+    whyNote("Compiled. No service handler to run: add `on call() -> …` to see output.");
     return;
   }
   if (reply.error) {
@@ -480,10 +487,97 @@ function showUnsupported(diags: Diagnostic[]): void {
   }
 }
 
+// --- Arguments (#82) ------------------------------------------------------------
+// When no service handler takes zero arguments, the first service's `on call(…)` is the
+// entry, and a row above the results takes its arguments, one field per parameter.
+// Values are kept by parameter name, so they survive edits to the program, and a shared
+// link carries them as `?args=`.
+let argValues: Record<string, FieldValue> = decodeArgs(new URLSearchParams(location.search).get("args"));
+let signature: EntrySignature = { kind: "none" };
+// The parameter list the row was last built for, so typing in the editor doesn't rebuild
+// it (and steal focus) unless the signature itself changed.
+let argsBuiltFor = "";
+
+function renderArgs(): void {
+  signature = entrySignature(source());
+  const form = $("args") as HTMLFormElement;
+  if (signature.kind !== "params") {
+    form.hidden = true;
+    argsBuiltFor = "";
+    return;
+  }
+  form.hidden = false;
+  const key = JSON.stringify(signature.params);
+  if (key === argsBuiltFor) return;
+  argsBuiltFor = key;
+  const fields = $("args-fields");
+  fields.innerHTML = "";
+  for (const p of signature.params) {
+    const label = document.createElement("label");
+    label.className = "arg";
+    const name = document.createElement("span");
+    name.className = "arg-name";
+    name.append(p.name, ": ", Object.assign(document.createElement("code"), { textContent: p.type }));
+    if (p.input === null) {
+      const why = document.createElement("span");
+      why.className = "arg-unsupported";
+      why.textContent = "can't be entered here yet";
+      label.append(name, why);
+    } else if (p.input === "bool") {
+      const box = Object.assign(document.createElement("input"), { type: "checkbox", checked: argValues[p.name] === true });
+      box.addEventListener("change", () => (argValues[p.name] = box.checked));
+      label.append(box, name);
+      label.classList.add("arg-bool");
+    } else {
+      const input = Object.assign(document.createElement("input"), {
+        type: "text",
+        value: typeof argValues[p.name] === "string" ? (argValues[p.name] as string) : "",
+        spellcheck: false,
+        autocomplete: "off",
+      });
+      if (p.input === "int") input.inputMode = "numeric";
+      if (p.input === "float") input.inputMode = "decimal";
+      input.addEventListener("input", () => (argValues[p.name] = input.value));
+      label.append(name, input);
+    }
+    fields.appendChild(label);
+  }
+}
+
+let argsTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleArgs(): void {
+  clearTimeout(argsTimer);
+  argsTimer = setTimeout(renderArgs, 150);
+}
+
+// The call to make, an error to show instead of running (a field that isn't a value of its
+// type, or a type that can't be entered), or nothing: the zero-argument handler runs as always.
+function readCall(): { call?: RunCall; error?: string } {
+  if (signature.kind !== "params") return {};
+  const args: unknown[] = [];
+  for (const p of signature.params) {
+    const r = readArg(p, argValues[p.name]);
+    if ("error" in r) return { error: r.error };
+    args.push(r.value);
+  }
+  return {
+    call: { service: signature.service, args, checks: signature.params.map((p) => ({ name: p.name, refines: p.refines })) },
+  };
+}
+
+// `?args=` for a link to this program, holding just the current handler's values.
+function argsParam(): string | null {
+  if (signature.kind !== "params") return null;
+  const values: Record<string, FieldValue> = {};
+  for (const p of signature.params) if (p.input !== null && argValues[p.name] !== undefined) values[p.name] = argValues[p.name];
+  return Object.keys(values).length > 0 ? encodeArgs(values) : null;
+}
+
 // `remember`: the user asked for this run, so it is worth listing under Recent (not an
 // automatic first run, an example or a tour starter).
 async function compileAndRun(remember = false): Promise<TourOutcome> {
   const id = ++runSeq;
+  renderArgs();
   setStatus("compiling…", "busy");
   lastReply = undefined;
   lastNote = "Compiling…";
@@ -523,22 +617,41 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
     return { compiled: true, error: "sandbox not ready" };
   }
 
+  const { call, error: argError } = readCall();
+  // A run nobody asked for (a link opened, an example loaded) waits for the arguments
+  // rather than reporting fields the user hasn't had a chance to fill in. (A type that
+  // can't be entered at all is still said at once: filling in won't help.)
+  const fillable = signature.kind === "params" && signature.params.every((p) => p.input !== null);
+  if (argError && !remember && fillable) {
+    lastNote = "Fill in the arguments above, then press Run.";
+    renderOutput();
+    setStatus("needs arguments");
+    return { compiled: true, error: argError };
+  }
+  if (argError) {
+    lastReply = { kind: "bynk-result", id, logs: [], argError };
+    renderOutput();
+    selectTab("result");
+    setStatus("check arguments", "error");
+    return { compiled: true, error: argError };
+  }
   if (remember && !EMBED) rememberRun(source());
   setStatus("running…", "busy");
   const reply = await new Promise<RunReply>((resolve) => {
     pending.set(id, resolve);
-    sandboxPort!.postMessage({ kind: "bynk-run", id, files: result.files, timeoutMs: RUN_TIMEOUT_MS });
+    sandboxPort!.postMessage({ kind: "bynk-run", id, files: result.files, timeoutMs: RUN_TIMEOUT_MS, call });
   });
   // A later Run has started since: its outcome is the one to show.
   if (id !== runSeq) return { compiled: true, superseded: true };
   lastReply = reply;
   renderOutput();
   dismissCoach();
-  setStatus(reply.error || reply.timedOut ? "run failed" : "ran", reply.error || reply.timedOut ? "error" : "ok");
+  const failed = reply.error || reply.timedOut || reply.argError;
+  setStatus(reply.argError ? "check arguments" : failed ? "run failed" : "ran", failed ? "error" : "ok");
   return {
     compiled: true,
     value: reply.value,
-    error: reply.error ?? (reply.timedOut ? "timed out" : undefined),
+    error: reply.error ?? reply.argError ?? (reply.timedOut ? "timed out" : undefined),
   };
 }
 
@@ -748,7 +861,9 @@ async function share(): Promise<void> {
   setShareStatus("Creating link…");
   dialog.showModal();
 
-  const hash = `${location.origin}${location.pathname}#${await encodeSnippet(src)}`;
+  const args = argsParam();
+  const query = args ? `?args=${encodeURIComponent(args)}` : "";
+  const hash = `${location.origin}${location.pathname}${query}#${await encodeSnippet(src)}`;
   let short: string | undefined;
   // Prefer a short link via the same-origin share service; the hash link is the
   // fallback, so the playground works without the service.
@@ -760,7 +875,7 @@ async function share(): Promise<void> {
     });
     if (res.ok) {
       const { id } = (await res.json()) as { id: string };
-      short = `${location.origin}${location.pathname}?s=${encodeURIComponent(id)}`;
+      short = `${location.origin}${location.pathname}?s=${encodeURIComponent(id)}${args ? `&args=${encodeURIComponent(args)}` : ""}`;
     }
   } catch {
     // network/Worker error: use the hash link
@@ -888,7 +1003,11 @@ async function loadInitialSource(): Promise<string> {
     }
     // A missing snippet will not come back, so drop the dead link; an unreachable
     // service may, so keep it for a reload. Either way, fall through to the hash / default.
-    if (linkProblem === "missing") window.history.replaceState(null, "", location.pathname + location.hash);
+    if (linkProblem === "missing") {
+      const u = new URL(location.href);
+      u.searchParams.delete("s");
+      window.history.replaceState(null, "", u);
+    }
   }
   const fromHash = await decodeSnippet(location.hash);
   if (fromHash !== null && fromHash !== undefined) {
@@ -932,9 +1051,11 @@ let currentExampleId: string | null = EXAMPLES[0].id;
 
 function loadSnippet(src: string): void {
   setEditorContent(src);
-  // Loading a snippet drops any shared-snippet URL (?s= / #hash) so a reshare is
-  // clean. (`window.history`; the bare `history` is CodeMirror's editor history.)
+  // Loading a snippet drops any shared-snippet URL (?s= / #hash / ?args=) so a reshare
+  // is clean. (`window.history`; the bare `history` is CodeMirror's editor history.)
   window.history.replaceState(null, "", location.pathname);
+  argValues = {};
+  argsBuiltFor = "";
   void compileAndRun();
 }
 
@@ -1130,7 +1251,10 @@ function makeEditor(doc: string): void {
           ...historyKeymap,
         ]),
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) scheduleDraftSave();
+          if (u.docChanged) {
+            scheduleDraftSave();
+            scheduleArgs();
+          }
         }),
         highlightCompartment.of(bynkHighlighting()),
         bynkLinter,
@@ -1301,6 +1425,11 @@ async function main(): Promise<void> {
   mountMenu();
   mountLearn();
   mountAbout();
+  // Enter in an argument field runs, like the Run button.
+  $("args").addEventListener("submit", (e) => {
+    e.preventDefault();
+    void compileAndRun(true);
+  });
   showCoach();
   renderOutput();
   const t0 = initialTourIndex();

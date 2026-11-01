@@ -48,7 +48,7 @@ after(async () => {
 
 const status = () => page.text("#status");
 const settled = () =>
-  page.waitFor(`/^(ran|run failed|\\d+ errors?|link copied)$/.test(document.getElementById("status").textContent)`, "a finished run");
+  page.waitFor(`/^(ran|run failed|check arguments|needs arguments|\\d+ errors?|link copied)$/.test(document.getElementById("status").textContent)`, "a finished run");
 
 // Open the app on a clean slate (no saved draft, recents or tour progress).
 async function fresh(path = "") {
@@ -316,11 +316,12 @@ test("What runs here opens from the Learn menu, the gallery and every limit mess
   assert.equal(await opened(), true);
   assert.equal(await page.visible("#learn-links"), false, "the dropdown closes behind it");
   const text = await page.text("#about-runs");
-  for (const want of [/on call\(\) -> …/, /stopped after 3 seconds/, /Logger/, /Fetch and Secrets/, /bynk\.cloudflare/, /Install Bynk/]) assert.match(text, want);
+  for (const want of [/on call\(\) -> …/, /stopped after 3 seconds/, /Logger/, /Fetch and Secrets/, /bynk\.cloudflare/, /Install Bynk/, /under Arguments/]) assert.match(text, want);
   await page.key("Escape");
   assert.equal(await opened(), false);
   // The item that opened it has closed with the dropdown, so focus goes back to Learn.
-  assert.equal(await page.eval(`document.activeElement.id`), "learn-btn");
+  // (The dialog's close event, which moves it, fires a moment after Escape.)
+  await page.waitFor(`document.activeElement.id === "learn-btn"`, "focus back on Learn");
   await page.click("#examples");
   await page.click("#gallery [data-about]");
   assert.equal(await opened(), true);
@@ -330,7 +331,6 @@ test("What runs here opens from the Learn menu, the gallery and every limit mess
 
   // Each limit carries its own way in.
   const limits = {
-    noentry: ["context demo.t\n\nservice s {\n\ton call(n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n", "#output"],
     // An HTTP route compiles but isn't an entry, as the note says.
     route: ['context demo.t\n\nactor Visitor { auth = None }\n\nservice api from http {\n\ton GET("/") () -> Effect[HttpResult[String]] by Visitor {\n\t\tOk("hi")\n\t}\n}\n', "#output"],
     secrets: ['context demo.t\n\nconsumes bynk { Secrets }\n\nservice s {\n\ton call() -> Effect[String] given Secrets {\n\t\tlet _ <- Secrets.get("KEY")\n\t\t"x"\n\t}\n}\n', "#output"],
@@ -345,6 +345,107 @@ test("What runs here opens from the Learn menu, the gallery and every limit mess
     assert.equal(await opened(), true, id);
     await close();
   }
+});
+
+const GREET =
+  'context demo.greet\n\ntype Slug = String where Matches("[a-z]+")\n\nservice greet {\n\ton call(name: String, times: Int, tag: Slug) -> Effect[String] {\n\t\tname.concat(" x").concat(times.toString()).concat(" #").concat(tag)\n\t}\n}\n';
+
+// Set an Arguments field the way typing does.
+const setArg = (name, value) =>
+  page.eval(`(() => {
+    const label = [...document.querySelectorAll("#args .arg")].find((l) => l.querySelector(".arg-name").firstChild.textContent === ${JSON.stringify(name)});
+    const input = label.querySelector("input");
+    input.value = ${JSON.stringify(value)};
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  })()`);
+
+test("a handler that takes arguments runs with the values under Arguments, no editing needed", { skip }, async () => {
+  share.store.set("greet", GREET);
+  await fresh("?s=greet");
+  await page.waitFor(`!document.getElementById("args").hidden`, "the Arguments row");
+  assert.deepEqual(
+    await page.eval(`[...document.querySelectorAll("#args .arg-name")].map((n) => n.textContent)`),
+    ["name: String", "times: Int", "tag: Slug"],
+  );
+  // Opened with empty fields, it waits for them rather than reporting them as wrong.
+  assert.equal(await page.text("#status"), "needs arguments");
+  assert.match(await page.text("#output"), /Fill in the arguments above, then press Run/);
+  // Run with them still empty says which one is missing.
+  await page.click("#run");
+  await page.waitFor(`document.getElementById("status").textContent === "check arguments"`, "the argument check");
+  assert.match(await page.text("#output"), /Can't call the handler: `times` needs a whole number/);
+
+  const run = async (want) => {
+    await page.click("#run");
+    await page.waitFor(`/ran|check arguments|failed/.test(document.getElementById("status").textContent)`, "the run");
+    assert.match(await page.text("#output"), want);
+  };
+  await setArg("name", "Ada");
+  await setArg("times", "2");
+  await setArg("tag", "hello");
+  await run(/⇒ Ada x2 #hello/);
+  await setArg("name", "Grace");
+  await run(/⇒ Grace x2 #hello/);
+  assert.match(await page.editor(), /on call\(name: String/, "the program wasn't edited");
+
+  // A value that fails its refinement is reported against the argument, not as a crash.
+  await setArg("tag", "Hello");
+  await run(/Can't call the handler: `tag` must match \/\[a-z\]\+\/ \(Slug\)/);
+  assert.equal(await page.text("#status"), "check arguments");
+
+  // Enter in a field runs.
+  await setArg("tag", "ok");
+  await page.eval(`document.querySelector("#args input").focus()`);
+  await page.key("Enter");
+  await page.waitFor(`/Grace x2 #ok/.test(document.getElementById("output").textContent)`, "the Enter run");
+});
+
+test("a shared link keeps its arguments, as a short link and as a self-contained one", { skip }, async () => {
+  share.store.set("greet2", GREET);
+  await fresh("?s=greet2");
+  await page.waitFor(`!document.getElementById("args").hidden`, "the Arguments row");
+  await setArg("name", "Lin");
+  await setArg("times", "3");
+  await setArg("tag", "abc");
+  await page.click("#share");
+  await page.waitFor(`document.getElementById("share-url").value`, "a share link");
+  const short = await page.eval(`document.getElementById("share-url").value`);
+  assert.match(short, /\?s=[^&]+&args=/);
+  await fresh(short.replace(/^https?:\/\/[^/]+\/?/, "/").replace(/^\//, ""));
+  await page.waitFor(`/Lin x3 #abc/.test(document.getElementById("output").textContent)`, "the short link's run");
+
+  // The self-contained link, when the share service is down.
+  share.state.down = true;
+  await page.click("#share-sheet .gallery-head button");
+  await page.click("#share");
+  await page.waitFor(`document.getElementById("share-url").value.includes("#")`, "a self-contained link");
+  const hash = await page.eval(`document.getElementById("share-url").value`);
+  assert.match(hash, /\?args=[^#]+#/);
+  await fresh(hash.replace(/^https?:\/\/[^/]+\//, ""));
+  await page.waitFor(`/Lin x3 #abc/.test(document.getElementById("output").textContent)`, "the self-contained link's run");
+});
+
+test("a handler whose argument can't be entered says so, rather than that there's no handler", { skip }, async () => {
+  share.store.set("point", "context demo.p\n\ntype Point = { x: Int, y: Int }\n\nservice s {\n\ton call(p: Point, n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n");
+  await fresh("?s=point");
+  assert.match(await page.text("#args"), /p: Point\s*can't be entered here yet/);
+  assert.match(await page.text("#output"), /Can't call the handler: a `Point` can't be entered here yet/);
+  assert.doesNotMatch(await page.text("#output"), /No service handler/);
+});
+
+test("a zero-argument program has no Arguments row, and loading an example drops link arguments", { skip }, async () => {
+  await fresh(`?args=${encodeURIComponent('{"name":"x"}')}`);
+  assert.equal(await page.eval(`document.getElementById("args").hidden`), true);
+  assert.match(await page.text("#output"), /Hello from Bynk!/);
+
+  share.store.set("greet4", GREET);
+  await fresh(`?s=greet4&args=${encodeURIComponent(JSON.stringify({ name: "Ada", times: "2", tag: "x" }))}`);
+  await page.waitFor(`/Ada x2 #x/.test(document.getElementById("output").textContent)`, "the run with link arguments");
+  await page.click("#examples");
+  await page.click("#gallery-grid .card");
+  await settled();
+  assert.doesNotMatch(await page.eval(`location.search`), /args/);
+  assert.equal(await page.eval(`document.getElementById("args").hidden`), true);
 });
 
 test("when the code runner can't load, the page says so and can try again", { skip }, async () => {
