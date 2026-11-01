@@ -5,6 +5,7 @@
 // found. Run: `npm run test:e2e` (after `npm run fetch:assets`).
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { deflateRawSync } from "node:zlib";
 import { findChrome, launchBrowser, startApp, startFakeShare } from "./harness.mjs";
 
@@ -619,6 +620,12 @@ test("on a wide screen Learn opens a dropdown of links to the Book, install and 
   }
   assert.equal(await page.eval(`[...document.querySelectorAll("#learn-links a")].every((a) => a.target === "_blank" && a.rel.includes("noopener"))`), true);
 
+  // Last, the compiler release the build bundles, linking to its notes (#79).
+  const version = readFileSync(new URL("../../src/vendor/VERSION", import.meta.url), "utf8").trim();
+  assert.equal(await page.eval(`document.querySelector("#learn-links a:last-of-type").id`), "bynk-version");
+  assert.equal(await page.eval(`document.getElementById("bynk-version").textContent`), `Bynk ${version} release notes ↗`);
+  assert.equal(await page.eval(`document.getElementById("bynk-version").href`), `https://github.com/bynk-lang/bynk/releases/tag/${version}`);
+
   // Opening moves focus to the first link; Escape closes it and returns focus to the button.
   await page.click("#learn-btn");
   assert.equal(await page.visible("#learn-links"), true);
@@ -657,6 +664,7 @@ test("on a phone Examples, Tour and Theme fold into a menu button, in one toolba
     // Learn's links are items in the menu, not a dropdown of their own.
     assert.equal(await page.visible("#learn-btn"), false);
     assert.equal(await page.visible("#learn-links a"), true);
+    assert.equal(await page.visible("#bynk-version"), true, "the compiler version is in the menu too");
     assert.equal(await page.eval(`document.documentElement.scrollWidth > innerWidth`), false);
     await page.click("#examples");
     assert.equal(await page.eval(`document.getElementById("gallery").open`), true);

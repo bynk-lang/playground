@@ -21,7 +21,7 @@ import { bynkHighlighting } from "./highlight";
 import { bynkTreeSitterHighlighting } from "./tshighlight";
 import { groupFiles, lineCount } from "./jsview";
 import { encodeSnippet, decodeSnippet } from "./deeplink";
-import { BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
+import { BYNK_VERSION, BYNK_WASM, SANDBOX_ORIGIN } from "./shared";
 import type { CompileResult, Diagnostic, EmittedFile, RunReply, SandboxConnect } from "./shared";
 import { EXAMPLES } from "./examples";
 import type { Example } from "./examples";
@@ -569,6 +569,13 @@ function mountMenu(): void {
 function mountLearn(): void {
   const learn = $("learn");
   const button = $("learn-btn");
+  // Last in the list: the compiler release this build runs, linking to its notes (#79).
+  if (BYNK_VERSION) {
+    const link = $("bynk-version") as HTMLAnchorElement;
+    link.href = `https://github.com/bynk-lang/bynk/releases/tag/${BYNK_VERSION}`;
+    link.append("Bynk ", Object.assign(document.createElement("code"), { textContent: BYNK_VERSION }), " release notes ↗");
+    link.hidden = false;
+  }
   const setOpen = (open: boolean): void => {
     learn.toggleAttribute("data-open", open);
     button.setAttribute("aria-expanded", String(open));

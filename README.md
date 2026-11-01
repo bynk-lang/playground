@@ -38,7 +38,7 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 | `src/deeplink.ts` | The shared snippet format: `#base64url(deflate-raw(utf8(source)))`. |
 | `src/highlight.ts` | CodeMirror Bynk highlighting (stream-based; see *Highlighting* below). |
 | `src/shared.ts` | Origin config + the postMessage protocol. |
-| `BYNK_VERSION` | The Bynk release the app is built from. |
+| `BYNK_VERSION` | The Bynk release the app is built from. The page shows the release it bundles (the staged tarball's `VERSION`, else this pin) at the foot of the Learn menu, linking to its notes. |
 | `scripts/fetch-assets.sh` | Download a release's `bynk-web-<tag>.tar.gz`, verify it against the release's `SHA256SUMS`, and unpack it into `src/vendor/`. |
 | `build.mjs` / `serve.mjs` | esbuild build into `dist/`, minified (`BYNK_MINIFY=0` to skip), with the app bundle, wasm and fonts content-hashed under `static/` and cached for a year by `_headers`, which also carries the page's Content-Security-Policy / a two-port local static server that applies the same `_headers`. |
 | `wrangler.app.jsonc` / `wrangler.sandbox.jsonc` | The two Workers that serve `dist/`, one per origin. |

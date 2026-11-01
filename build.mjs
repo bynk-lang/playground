@@ -48,12 +48,24 @@ for (const w of ["tree-sitter.wasm", "tree-sitter-bynk.wasm"]) {
   }
 }
 
+// The compiler release the app is built from, shown in the page (#79): the tag the staged
+// tarball records (so a canary build against another release says so), else the pin.
+let bynkVersion;
+for (const f of ["src/vendor/VERSION", "BYNK_VERSION"]) {
+  try {
+    bynkVersion = (await readFile(f, "utf8")).trim();
+    break;
+  } catch {}
+}
+if (!/^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(bynkVersion ?? "")) throw new Error(`not a release tag: ${bynkVersion}`);
+
 const define = {
   __APP_ORIGIN__: JSON.stringify(appOrigin),
   __SANDBOX_ORIGIN__: JSON.stringify(sandboxOrigin),
   __BYNK_WASM__: JSON.stringify(bynkWasm),
   __TS_WASM__: JSON.stringify(treeSitter["tree-sitter.wasm"]),
   __TS_BYNK_WASM__: JSON.stringify(treeSitter["tree-sitter-bynk.wasm"]),
+  __BYNK_VERSION__: JSON.stringify(bynkVersion),
 };
 
 // web-tree-sitter's wasm glue imports Node built-ins (`fs/promises`, `module`, …) on a
