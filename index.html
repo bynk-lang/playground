@@ -294,6 +294,10 @@
       .about-body ul { padding-left: 1.25rem; }
       .about-body code { font: 400 0.8125rem var(--font-mono); }
       .gallery-foot { margin: 0.75rem 0 0; color: var(--ink-muted); font-size: 0.875rem; }
+      #beyond ul { margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--ink-muted); }
+      #beyond li { margin: 0.25rem 0; }
+      #beyond a { color: var(--accent); font-weight: 600; text-underline-offset: 0.1875rem; margin-right: 0.25rem; }
+      #beyond code { font: 400 0.8125rem var(--font-mono); color: var(--ink); }
       .gallery-foot button.link, .out-note button.link, #unsupported button.link { padding: 0; min-height: 0; font-size: inherit; }
       #share-url { flex: 1; min-width: 0; padding: 0.5rem 0.75rem; min-height: 2.5rem; font: 400 0.8125rem var(--font-mono);
         background: var(--surface-panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
@@ -573,6 +577,15 @@
         </div>
         <p id="gallery-empty" class="out-empty" hidden>No example matches that search.</p>
         <p class="gallery-foot">Every example runs here, in your browser. <button type="button" class="link" data-about>What runs here?</button></p>
+        <!-- What a single-file, in-browser playground can't show (#83): the Book has it. -->
+        <section id="beyond" aria-labelledby="beyond-title">
+          <h3 id="beyond-title" class="recent-title">Beyond the playground</h3>
+          <ul>
+            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">An HTTP service ↗</a> Routes, JSON request bodies and <code>HttpResult</code>, compiled to a Worker with the CLI.</li>
+            <li><a href="https://bynk-lang.org/book/tutorials/06-testing/" target="_blank" rel="noopener">Testing ↗</a> <code>suite</code> and <code>case</code> blocks, <code>expect</code> and <code>stub</code> doubles, run with <code>bynkc test</code>.</li>
+            <li><a href="https://bynk-lang.org/book/guides/program-structure/how-a-program-is-shaped/" target="_blank" rel="noopener">Modules and several contexts ↗</a> <code>commons</code>, <code>uses</code> and <code>consumes</code>: a playground file holds one context, so these need a project.</li>
+          </ul>
+        </section>
       </dialog>
     </div>
     <script type="module" src="./app.js"></script>
