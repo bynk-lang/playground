@@ -264,6 +264,56 @@ test("on a wide screen the compiled JS moves beside the editor, follows each run
   }
 });
 
+test("an edited example resets to its original, with the edits kept under Recent and Undo", { skip }, async () => {
+  await fresh();
+  assert.equal(await page.visible("#reset"), false, "nothing edited yet");
+  await page.click("#examples");
+  await page.eval(`[...document.querySelectorAll("#gallery-grid .card")].find((c) => c.querySelector(".card-title").textContent === "Records").click()`);
+  await settled();
+  const original = await page.editor();
+  assert.equal(await page.visible("#reset"), false);
+
+  await page.type("// my change\n");
+  const edited = await page.editor();
+  assert.notEqual(edited, original);
+  assert.equal(await page.visible("#reset"), true);
+
+  await page.click("#reset");
+  await settled();
+  assert.equal(await page.editor(), original, "the original is back");
+  assert.equal(await page.visible("#reset"), false);
+  assert.equal(await status(), "ran", "and runs, as loading it did");
+
+  // The edits aren't lost: one Undo, and they're under Recent.
+  await page.eval(`document.querySelector(".cm-content").focus()`);
+  await page.key("z", { ctrl: true });
+  assert.equal(await page.editor(), edited);
+  assert.equal(await page.visible("#reset"), true);
+  const recent = await page.eval(`JSON.parse(localStorage.getItem("bynk-recent") || "[]")`);
+  assert.ok(JSON.stringify(recent).includes("my change"), "kept under Recent");
+});
+
+test("an edited shared snippet resets to the shared code and keeps its link", { skip }, async () => {
+  share.store.set("resetme", SCRATCH + "context demo.t\n\nservice s {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n");
+  await fresh("?s=resetme");
+  const original = await page.editor();
+  await page.type("// mine\n");
+  await page.click("#reset");
+  await settled();
+  assert.equal(await page.editor(), original);
+  assert.match(await page.eval(`location.search`), /s=resetme/);
+});
+
+test("a restored draft is the user's own work: no reset", { skip }, async () => {
+  await fresh();
+  await page.type("// draft\n");
+  await page.eval(`new Promise((r) => setTimeout(r, 1200))`);
+  await page.goto(app.url);
+  await settled();
+  assert.match(await page.editor(), /\/\/ draft/);
+  assert.equal(await page.visible("#reset"), false);
+});
+
 test("the result tabs: Logs counts lines, arrow keys move between tabs", { skip }, async () => {
   await fresh();
   assert.equal(await page.text("#logs-badge"), "1");
