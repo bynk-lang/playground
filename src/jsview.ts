@@ -4,7 +4,7 @@
 // capability bindings (`support`). The sandbox still gets every file; this is only the view.
 //
 // The compiler will say which is which (bynk-lang/bynk#2425: each emitted file carries
-// `kind`). Until a release does, the kind is read from the layout bynkc emits: the runtime
+// `kind`). Until a release does, the kind is read from the layout bynk emits: the runtime
 // (`runtime.js`, or `__bynk_runtime/` since 0.405) and the `bynk` namespace (reserved, so no
 // program's context can live there) are support,
 // and `compose.js` is wiring when it is the composition root. A capability-free program
