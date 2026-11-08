@@ -127,7 +127,7 @@ A manual run: Actions → Bynk canary → Run workflow, with a version or `lates
 ## Share service (`share/`) — written in Bynk
 
 Short share links (`?s=<id>`) are backed by a **Bynk program** (`share/`)
-compiled by `bynkc` to a Cloudflare Worker + KV — dogfooding: the playground that
+compiled by `bynk` to a Cloudflare Worker + KV — dogfooding: the playground that
 compiles Bynk has a backend *written* in Bynk. `POST /api/snippets` stores the source
 under a random id; `GET /api/snippets/:id` returns it. The `Source` refined type
 bounds the body, so oversized/empty payloads are rejected at the boundary (`400`).
@@ -145,7 +145,7 @@ Build + run + verify locally:
 
 ```sh
 # Compile the Bynk service to a JS Worker:
-bynkc compile share --target workers --platform cloudflare --emit js -o /tmp/share-js
+bynk compile share --target workers --platform cloudflare --emit js -o /tmp/share-js
 # Run it (set wrangler.toml main=index.js + a dummy local KV id):
 cd /tmp/share-js/workers/snippets && npx wrangler@4 dev --port 8799 --local
 # serve.mjs proxies /api/* → http://localhost:8799 (override with BYNK_SHARE_WORKER),
