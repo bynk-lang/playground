@@ -47,7 +47,7 @@ jobs:
       - name: Read the pinned Bynk release
         id: pin
         run: echo "tag=$(tr -d '[:space:]' < BYNK_VERSION)" >> "$GITHUB_OUTPUT"
-      - uses: bynk-lang/bynk-ci@e23597e72c032e7ec1fe20a81fc0586a03b7fd38 # v1.2.0
+      - uses: bynk-lang/bynk-ci@16971dbe8db701e2cd3905f68f9e2f50e84ab366 # v1.2.1
         with:
           version: ${{ steps.pin.outputs.tag }}
           working-directory: share
@@ -98,7 +98,7 @@ jobs:
       - name: Deploy the share service
         id: deploy
         if: steps.mode.outputs.live == 'true'
-        uses: bynk-lang/bynk-deploy@04ed36c10a284f40fdbf5883e2bf03e23e4681cd # v2.2.0
+        uses: bynk-lang/bynk-deploy@422b47aeb37ba7ad0d8ba1f87755ae7e422dc462 # v2.2.2
         with:
           version: ${{ steps.mode.outputs.tag }}
           working-directory: share
@@ -127,7 +127,7 @@ jobs:
           fi
       - name: Plan the share service
         if: steps.mode.outputs.live != 'true'
-        uses: bynk-lang/bynk-deploy@04ed36c10a284f40fdbf5883e2bf03e23e4681cd # v2.2.0
+        uses: bynk-lang/bynk-deploy@422b47aeb37ba7ad0d8ba1f87755ae7e422dc462 # v2.2.2
         with:
           version: ${{ steps.mode.outputs.tag }}
           working-directory: share
