@@ -71,11 +71,12 @@ jobs:
       - name: Unit tests + gallery examples
         run: npm test
       # Fetch wrangler once, here, rather than inside the Workers tests' time budget (#43).
+      # The pin lives in WRANGLER_VERSION; the Workers tests read it from there too.
       - name: Fetch wrangler
-        run: npx --yes wrangler@4.152.0 --version
+        run: npx --yes "wrangler@$(tr -d '[:space:]' < WRANGLER_VERSION)" --version
       - name: Browser tests
         # Includes the Workers tests, which run the real app and sandbox Workers under
-        # `npx wrangler@4.152.0 dev` (the version ci.yml deploys with).
+        # `npx wrangler@<WRANGLER_VERSION> dev` (the version ci.yml deploys with).
         timeout-minutes: 10
         # Drives the built app in the runner's preinstalled Chrome (test/e2e).
         env:

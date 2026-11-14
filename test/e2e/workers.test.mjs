@@ -3,7 +3,7 @@
 // sandbox Worker (execution document only, everything else redirected to the app), run
 // under `wrangler dev` from the repo's own wrangler.*.jsonc. These are the behaviours a
 // deploy ships and the unit tests can only fake. Needs Chrome and network access for
-// `npx wrangler@4.152.0` (the same pin ci.yml deploys with).
+// `npx wrangler@<WRANGLER_VERSION>` (the same pin ci.yml deploys with).
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { findChrome, launchBrowser, startWorkers } from "./harness.mjs";

@@ -7,10 +7,13 @@ import { spawn, execFileSync } from "node:child_process";
 import { createServer } from "node:net";
 import { createServer as createHttp } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = new URL("../../", import.meta.url).pathname;
+// The one Wrangler pin, shared with the CI workflows.
+const WRANGLER = `wrangler@${readFileSync(join(root, "WRANGLER_VERSION"), "utf8").trim()}`;
 
 export function findChrome() {
   if (process.env.CHROME) return process.env.CHROME;
@@ -312,7 +315,7 @@ async function startWorkersOnce() {
   const env = { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false", NO_COLOR: "1" };
   const procs = [];
   const start = (args, port, label) => {
-    const p = spawn("npx", ["--yes", "wrangler@4.152.0", "dev", "--local", "--port", String(port), "--inspector-port", String(args.inspector),
+    const p = spawn("npx", ["--yes", WRANGLER, "dev", "--local", "--port", String(port), "--inspector-port", String(args.inspector),
       // Each session keeps its own local state: two sharing one lock each other out (SQLITE_BUSY).
       "--persist-to", join(dir, `state-${label}`), ...args.configs.flatMap((c) => ["-c", c])], {
       cwd: root,
