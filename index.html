@@ -303,6 +303,16 @@
       dialog.sheet::backdrop { background: rgba(0, 0, 0, 0.5); }
       dialog#gallery { width: min(47.5rem, calc(100vw - 1.5rem)); }
       dialog#share-sheet { width: min(28.75rem, calc(100vw - 1.5rem)); }
+      dialog#shortcuts-sheet { width: min(36rem, calc(100vw - 1.5rem)); }
+      .shortcut-groups { display: grid; gap: 1rem; }
+      .shortcut-group h3 { margin: 0 0 0.375rem; color: var(--ink-muted); font: 600 0.75rem/1rem var(--font-sans);
+        letter-spacing: 0.06em; text-transform: uppercase; }
+      .shortcut-group dl { display: grid; grid-template-columns: 1fr auto; gap: 0.375rem 1rem; margin: 0; }
+      .shortcut-group dt { color: var(--ink); }
+      .shortcut-group dd { margin: 0; text-align: right; white-space: nowrap; }
+      .shortcut-group kbd { display: inline-block; margin: 0; padding: 0.125rem 0.375rem; border: 1px solid var(--line-strong);
+        border-radius: 0.25rem; color: var(--ink); opacity: 1; }
+      #shortcuts-note { margin: 1rem 0 0; color: var(--ink-muted); font-size: 0.8125rem; }
       dialog#about-runs { width: min(40rem, calc(100vw - 1.5rem)); }
       dialog#reference { width: min(44rem, calc(100vw - 1.5rem)); height: min(40rem, calc(100vh - 3rem)); }
       #reference-search { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; min-height: 2.5rem; font: 400 0.875rem var(--font-sans);
@@ -348,7 +358,7 @@
       a.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
       /* The compact embed view (?embed=1): run it, or open it in the full playground. */
-      [data-embed] #examples, [data-embed] #tour-btn, [data-embed] #format, [data-embed] #share, [data-embed] #theme, [data-embed] #learn, [data-embed] #menu-btn,
+      [data-embed] #examples, [data-embed] #tour-btn, [data-embed] #format, [data-embed] #share, [data-embed] #shortcuts-btn, [data-embed] #theme, [data-embed] #learn, [data-embed] #menu-btn,
       [data-embed] #coach, [data-embed] #shared-note, [data-embed] #restored-note { display: none !important; }
       [data-embed] #app { padding: 0.5rem; gap: 0.5rem; }
 
@@ -456,6 +466,7 @@
               <a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a>
               <a href="https://github.com/bynk-lang/bynk" target="_blank" rel="noopener">Bynk on GitHub ↗</a>
               <a href="https://github.com/bynk-lang/playground" target="_blank" rel="noopener">Playground source &amp; issues ↗</a>
+              <button id="shortcuts-btn" type="button">Keyboard shortcuts…</button>
               <!-- The compiler release this build runs (#79), filled in by the app. -->
               <a id="bynk-version" target="_blank" rel="noopener" hidden></a>
             </div>
@@ -645,6 +656,33 @@
             <li><a href="https://bynk-lang.org/book/guides/program-structure/how-a-program-is-shaped/" target="_blank" rel="noopener">Modules and several contexts ↗</a> <code>commons</code>, <code>uses</code> and <code>consumes</code>: a playground file holds one context, so these need a project.</li>
           </ul>
         </section>
+      </dialog>
+      <dialog id="shortcuts-sheet" class="sheet" aria-labelledby="shortcuts-title">
+        <form method="dialog" class="gallery-head">
+          <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+          <button class="link" value="close" aria-label="Close keyboard shortcuts">Close</button>
+        </form>
+        <div class="shortcut-groups">
+          <section class="shortcut-group" aria-labelledby="shortcut-app-title">
+            <h3 id="shortcut-app-title">Playground</h3>
+            <dl>
+              <dt>Compile and run</dt><dd><kbd data-mac="&#8984;&#8617;" data-other="Ctrl+Enter">Ctrl+Enter</kbd></dd>
+              <dt>Format</dt><dd><kbd data-mac="&#8997;&#8679;F" data-other="Shift+Alt+F">Shift+Alt+F</kbd></dd>
+            </dl>
+          </section>
+          <section class="shortcut-group" aria-labelledby="shortcut-editor-title">
+            <h3 id="shortcut-editor-title">Editor</h3>
+            <dl>
+              <dt>Comment or uncomment line</dt><dd><kbd data-mac="&#8984;/" data-other="Ctrl+/">Ctrl+/</kbd></dd>
+              <dt>Add cursor above or below</dt><dd><kbd data-mac="&#8984;&#8997;&#8593;/&#8595;" data-other="Ctrl+Alt+&#8593;/&#8595;">Ctrl+Alt+&#8593;/&#8595;</kbd></dd>
+              <dt>Move line up or down</dt><dd><kbd data-mac="&#8997;&#8593;/&#8595;" data-other="Alt+&#8593;/&#8595;">Alt+↑/↓</kbd></dd>
+              <dt>Copy line up or down</dt><dd><kbd data-mac="&#8679;&#8997;&#8593;/&#8595;" data-other="Shift+Alt+&#8593;/&#8595;">Shift+Alt+↑/↓</kbd></dd>
+              <dt>Indent or outdent</dt><dd><kbd data-mac="&#8984;[/]" data-other="Ctrl+[/]">Ctrl+[/]</kbd></dd>
+              <dt>Undo / redo</dt><dd><kbd data-mac="&#8984;Z" data-other="Ctrl+Z">Ctrl+Z</kbd> <span aria-hidden="true">/</span> <kbd data-mac="&#8679;&#8984;Z" data-other="Ctrl+Y" data-linux="Ctrl+Y / Ctrl+Shift+Z">Ctrl+Y</kbd></dd>
+            </dl>
+          </section>
+        </div>
+        <p id="shortcuts-note">Press ? outside the editor to open this list.</p>
       </dialog>
     </div>
     <script type="module" src="./app.js"></script>

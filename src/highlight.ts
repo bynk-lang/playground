@@ -42,6 +42,7 @@ const ATOMS = new Set([
 
 const bynk = StreamLanguage.define({
   name: "bynk",
+  languageData: { commentTokens: { line: "//" } },
   startState: () => ({}),
   token(stream) {
     if (stream.eatSpace()) return null;

@@ -1558,6 +1558,17 @@ async function main(): Promise<void> {
   }
   $("format").title = `Format to the house style (${IS_APPLE ? "⌥⇧F" : "Shift+Alt+F"})`;
   $("format").addEventListener("click", formatSource);
+  const shortcutsDialog = $("shortcuts-sheet") as HTMLDialogElement;
+  const openShortcuts = (): void => {
+    if (!shortcutsDialog.open) shortcutsDialog.showModal();
+  };
+  $("shortcuts-btn").addEventListener("click", openShortcuts);
+  // Linux also binds Ctrl+Shift+Z to redo; read the platform the way IS_APPLE does.
+  const isLinux = !IS_APPLE && [(navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform, navigator.platform]
+    .some((p) => p && /linux/i.test(p));
+  for (const kbd of shortcutsDialog.querySelectorAll<HTMLElement>("kbd[data-mac]")) {
+    kbd.textContent = (isLinux ? kbd.dataset.linux : undefined) ?? (IS_APPLE ? kbd.dataset.mac : kbd.dataset.other) ?? kbd.textContent;
+  }
   $("run").addEventListener("click", () => void compileAndRun(true));
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
@@ -1589,6 +1600,16 @@ async function main(): Promise<void> {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !(e.target as HTMLElement).closest(".cm-editor")) {
       e.preventDefault();
       void compileAndRun(true);
+    }
+    // Open keyboard shortcuts with ? outside inputs and the editor.
+    if (EMBED) return;
+    const target = e.target as HTMLElement;
+    if (
+      e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.defaultPrevented &&
+      !target.closest(".cm-editor, input, textarea, select, [contenteditable='true'], dialog")
+    ) {
+      e.preventDefault();
+      openShortcuts();
     }
   });
   mountTheme();
