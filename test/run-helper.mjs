@@ -1,5 +1,5 @@
-// Compile a Bynk source with the staged wasm compiler and run its one
-// zero-argument handler the way the sandbox Worker does (src/sandbox.ts).
+// Compile a Bynk source with the staged wasm compiler and run
+// `service playground`'s zero-argument `on call()` the way the sandbox Worker does (src/sandbox.ts).
 // Returns { ok, errors, logs, value, error } — the shape the tour's `check` reads.
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -33,10 +33,10 @@ export async function runSource(source, label = "run") {
     // As the sandbox Worker does: compose.js for a program with capabilities, the
     // context module's own surface for one without.
     const app = entry.kind === "surface" ? { context: mod.__makeSurface({}) } : mod.composeApp();
+    // The Worker's lookup: `service playground`'s `call`, and no other service.
     const entries = Object.values(app)
-      .filter((surface) => surface && typeof surface === "object")
-      .flatMap((surface) => Object.values(surface))
-      .filter((fn) => typeof fn === "function" && fn.length === 0);
+      .filter((surface) => surface && typeof surface === "object" && typeof surface.playground === "function" && surface.playground.length === 0)
+      .map((surface) => surface.playground);
     if (entries.length === 0) return { ok: true, errors: [], logs: [], noEntry: true };
     const logs = [];
     const { log, info } = console;

@@ -70,7 +70,7 @@ test("the opening program runs by itself across the sandbox origin", { skip }, a
 
 test("a program with no capabilities runs: it has no compose.js, and the sandbox must still find its handler", { skip }, async () => {
   // The reported snippet: no `consumes`, no `given`, so the compiler emits no composition root.
-  share.store.set("nocap", "context demo.records\n\ntype Point = { x: Int, y: Int }\n\nservice make {\n  on call() -> Effect[Point] {\n    Point { x: 3, y: 4 }\n  }\n}\n");
+  share.store.set("nocap", "context demo.records\n\ntype Point = { x: Int, y: Int }\n\nservice playground {\n  on call() -> Effect[Point] {\n    Point { x: 3, y: 4 }\n  }\n}\n");
   await fresh("?s=nocap");
   assert.equal(await status(), "ran");
   const out = await page.text("#output");
@@ -79,7 +79,7 @@ test("a program with no capabilities runs: it has no compose.js, and the sandbox
 });
 
 // Badly formatted but valid Bynk, and a source the formatter cannot parse.
-const MESSY = "context  demo.fmt\n\ntype  Point={x:Int,y:Int}\n\nservice make {\non call()->Effect[Point]{\nPoint{x:3,y:4}\n}\n}\n";
+const MESSY = "context  demo.fmt\n\ntype  Point={x:Int,y:Int}\n\nservice playground {\non call()->Effect[Point]{\nPoint{x:3,y:4}\n}\n}\n";
 const UNPARSABLE = "context demo.fmt\n\ntype Point = { x: Int,\n";
 
 test("Format rewrites the source to the house style as one undoable step", { skip }, async () => {
@@ -199,7 +199,7 @@ test("a broken program shows the error and does not run", { skip }, async () => 
 test("a diagnostic links its code to the Book, hints at a fix, and still jumps to the spot", { skip }, async () => {
   share.store.set(
     "nogiven",
-    'context demo.t\n\nconsumes bynk { Logger }\n\nservice s {\n\ton call() -> Effect[String] {\n\t\tlet _ <- Logger.info("hi")\n\t\t"x"\n\t}\n}\n',
+    'context demo.t\n\nconsumes bynk { Logger }\n\nservice playground {\n\ton call() -> Effect[String] {\n\t\tlet _ <- Logger.info("hi")\n\t\t"x"\n\t}\n}\n',
   );
   await fresh("?s=nogiven");
   await page.click("#run");
@@ -294,7 +294,7 @@ test("an edited example resets to its original, with the edits kept under Recent
 });
 
 test("an edited shared snippet resets to the shared code and keeps its link", { skip }, async () => {
-  share.store.set("resetme", SCRATCH + "context demo.t\n\nservice s {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n");
+  share.store.set("resetme", SCRATCH + "context demo.t\n\nservice playground {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n");
   await fresh("?s=resetme");
   const original = await page.editor();
   await page.type("// mine\n");
@@ -358,7 +358,7 @@ const SLOW = `context demo.slow
 
 consumes bynk { Logger }
 
-service s {
+service playground {
   on call() -> Effect[Int] given Logger {
     let _ <- Logger.info("slow")
     fib(45)
@@ -425,8 +425,8 @@ test("What runs here opens from the Learn menu, the gallery and every limit mess
   const limits = {
     // An HTTP route compiles but isn't an entry, as the note says.
     route: ['context demo.t\n\nactor Visitor { auth = None }\n\nservice api from http {\n\ton GET("/") () -> Effect[HttpResult[String]] by Visitor {\n\t\tOk("hi")\n\t}\n}\n', "#output"],
-    secrets: ['context demo.t\n\nconsumes bynk { Secrets }\n\nservice s {\n\ton call() -> Effect[String] given Secrets {\n\t\tlet _ <- Secrets.get("KEY")\n\t\t"x"\n\t}\n}\n', "#output"],
-    platform: ['context demo.t\n\nconsumes bynk.cloudflare { Kv }\n\nservice s {\n\ton call() -> Effect[String] given Kv {\n\t\t"x"\n\t}\n}\n', "#unsupported"],
+    secrets: ['context demo.t\n\nconsumes bynk { Secrets }\n\nservice playground {\n\ton call() -> Effect[String] given Secrets {\n\t\tlet _ <- Secrets.get("KEY")\n\t\t"x"\n\t}\n}\n', "#output"],
+    platform: ['context demo.t\n\nconsumes bynk.cloudflare { Kv }\n\nservice playground {\n\ton call() -> Effect[String] given Kv {\n\t\t"x"\n\t}\n}\n', "#unsupported"],
   };
   for (const [id, [source, where]] of Object.entries(limits)) {
     share.store.set(id, source);
@@ -459,7 +459,7 @@ test("the standard library reference opens from Learn and finds how to parse an 
 });
 
 const GREET =
-  'context demo.greet\n\ntype Slug = String where Matches("[a-z]+")\n\nservice greet {\n\ton call(name: String, times: Int, tag: Slug) -> Effect[String] {\n\t\tname.concat(" x").concat(times.toString()).concat(" #").concat(tag)\n\t}\n}\n';
+  'context demo.greet\n\ntype Slug = String where Matches("[a-z]+")\n\nservice playground {\n\ton call(name: String, times: Int, tag: Slug) -> Effect[String] {\n\t\tname.concat(" x").concat(times.toString()).concat(" #").concat(tag)\n\t}\n}\n';
 
 // Set an Arguments field the way typing does.
 const setArg = (name, value) =>
@@ -537,11 +537,11 @@ test("a shared link keeps its arguments, as a short link and as a self-contained
 });
 
 test("a handler whose argument can't be entered says so, rather than that there's no handler", { skip }, async () => {
-  share.store.set("point", "context demo.p\n\ntype Point = { x: Int, y: Int }\n\nservice s {\n\ton call(p: Point, n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n");
+  share.store.set("point", "context demo.p\n\ntype Point = { x: Int, y: Int }\n\nservice playground {\n\ton call(p: Point, n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n");
   await fresh("?s=point");
   assert.match(await page.text("#args"), /p: Point\s*can't be entered here yet/);
   assert.match(await page.text("#output"), /Can't call the handler: a `Point` can't be entered here yet/);
-  assert.doesNotMatch(await page.text("#output"), /No service handler/);
+  assert.doesNotMatch(await page.text("#output"), /Run calls only/);
 });
 
 test("a zero-argument program has no Arguments row, and loading an example drops link arguments", { skip }, async () => {
@@ -1087,4 +1087,12 @@ test("nothing the playground does is refused by its Content-Security-Policy", { 
   await page.eval(`document.body.append(Object.assign(document.createElement("script"), { textContent: "window.__ran = true" }))`);
   await page.waitFor(`JSON.parse(sessionStorage.getItem("csp-violations") || "[]").some((v) => v.startsWith("script-src"))`, "the refusal");
   assert.equal(await page.eval("window.__ran === true"), false);
+});
+
+test("a program with no `service playground` says Run calls only that, and names what it skipped", { skip }, async () => {
+  share.store.set("notplay", "context demo.n\n\nservice greet {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n");
+  await fresh("?s=notplay");
+  const out = await page.text("#output");
+  assert.match(out, /Run calls only/);
+  assert.match(out, /does not call `greet`/);
 });

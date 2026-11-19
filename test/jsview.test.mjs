@@ -46,7 +46,7 @@ test("every example's files are all grouped, each exactly once", () => {
 test("a capability-free context named compose is the program's own code", () => {
   const files = compile(`context compose
 
-service make {
+service playground {
   on call() -> Effect[Int] { 42 }
 }
 `);

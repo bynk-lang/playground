@@ -15,7 +15,7 @@ const { code } = await transform(source, { loader: "ts", format: "esm" });
 const { hintFor, learnMoreHref } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
 
 const program = (body, { decls = "", given = " given Logger" } = {}) =>
-  `context demo.t\n\nconsumes bynk { Logger }\n${decls}\nservice s {\n\ton call() -> Effect[String]${given} {\n${body}\n\t}\n}\n`;
+  `context demo.t\n\nconsumes bynk { Logger }\n${decls}\nservice playground {\n\ton call() -> Effect[String]${given} {\n${body}\n\t}\n}\n`;
 
 // Each newcomer mistake, and the code the compiler reports for it.
 const MISTAKES = [

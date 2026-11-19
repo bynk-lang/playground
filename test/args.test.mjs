@@ -9,23 +9,30 @@ const source = await readFile(new URL("../src/args.ts", import.meta.url), "utf8"
 const { code } = await transform(source, { loader: "ts", format: "esm" });
 const { entrySignature, readArg, encodeArgs, decodeArgs, mask } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
 
-const program = (handlers, decls = "") => `context demo.t\n${decls}\nservice s {\n${handlers}\n}\n`;
+const program = (handlers, decls = "") => `context demo.t\n${decls}\nservice playground {\n${handlers}\n}\n`;
 
-test("a zero-argument handler runs as it always has", () => {
+test("a zero-argument playground handler is the entry", () => {
   assert.deepEqual(entrySignature(program('\ton call() -> Effect[String] {\n\t\t"x"\n\t}')), { kind: "zero" });
-  // Even beside a service whose handler takes arguments.
-  const two = `context demo.t\n\nservice a {\n\ton call(n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n\nservice b {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n`;
-  assert.deepEqual(entrySignature(two), { kind: "zero" });
+});
+
+test("only `service playground` is the entry, whatever else is declared", () => {
+  const two = `context demo.t\n\nservice a {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n\nservice playground {\n\ton call(n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n`;
+  const sig = entrySignature(two);
+  assert.equal(sig.kind, "params");
+  assert.equal(sig.service, "playground");
+  // A zero-argument handler in another service is not an entry.
+  const other = `context demo.t\n\nservice a {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n\nservice b {\n\ton call() -> Effect[Int] {\n\t\t2\n\t}\n}\n`;
+  assert.deepEqual(entrySignature(other), { kind: "none", others: ["a", "b"] });
 });
 
 test("no service handler at all", () => {
-  assert.deepEqual(entrySignature("context demo.t\n\nfn f() -> Int { 1 }\n"), { kind: "none" });
+  assert.deepEqual(entrySignature("context demo.t\n\nfn f() -> Int { 1 }\n"), { kind: "none", others: [] });
 });
 
-test("the first service's parameters, with the field each one gets", () => {
+test("the playground service's parameters, with the field each one gets", () => {
   const sig = entrySignature(program("\ton call(name: String, times: Int, ratio: Float, loud: Bool) -> Effect[String] {\n\t\tname\n\t}"));
   assert.equal(sig.kind, "params");
-  assert.equal(sig.service, "s");
+  assert.equal(sig.service, "playground");
   assert.deepEqual(
     sig.params.map((p) => [p.name, p.type, p.input]),
     [
@@ -65,7 +72,7 @@ service fake {
 	on call(x: Int) -> Effect[Int] { x }
 }
 ---
-service s {
+service playground {
 	// on call(y: Int) -> Effect[Int]
 	on call(
 		name: String, // who to greet
@@ -75,14 +82,14 @@ service s {
 }
 `;
   const sig = entrySignature(src);
-  assert.equal(sig.service, "s");
+  assert.equal(sig.service, "playground");
   assert.deepEqual(sig.params.map((p) => p.name), ["name"]);
   assert.equal(mask('let s = "a \\" b"').length, 'let s = "a \\" b"'.length, "masking keeps offsets");
 });
 
 test("an agent's named handlers aren't entries", () => {
   const src = `context demo.t\n\nagent Counter {\n\tkey id: String\n\ton call add(n: Int) -> Effect[()] {\n\t\tEffect.pure(())\n\t}\n}\n`;
-  assert.deepEqual(entrySignature(src), { kind: "none" });
+  assert.deepEqual(entrySignature(src), { kind: "none", others: [] });
 });
 
 test("a field's text becomes the argument, or says why it can't", () => {
@@ -110,7 +117,7 @@ test("link arguments round-trip by name, and junk is dropped", () => {
   assert.deepEqual(decodeArgs(null), {});
 });
 
-test("every example and tour program keeps its zero-argument entry", async () => {
+test("every example and tour program has a `service playground` entry", async () => {
   const load = async (file) => {
     const { code } = await transform(await readFile(new URL(`../src/${file}`, import.meta.url), "utf8"), { loader: "ts", format: "esm" });
     return import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
@@ -118,6 +125,7 @@ test("every example and tour program keeps its zero-argument entry", async () =>
   const { EXAMPLES } = await load("examples.ts");
   const { TOUR } = await load("tour.ts");
   for (const ex of EXAMPLES) assert.equal(entrySignature(ex.source).kind, "zero", ex.id);
+  assert.ok(EXAMPLES.every((ex) => /\bservice playground\b/.test(ex.source)));
   for (const step of TOUR) {
     for (const src of [step.starter, step.solution]) assert.notEqual(entrySignature(src).kind, "params", step.id);
   }
