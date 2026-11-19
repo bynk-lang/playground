@@ -178,7 +178,7 @@ CI deploys the service with [`bynk-deploy`](https://github.com/bynk-lang/bynk-de
 
 From then on every push to `main` redeploys the service, and the app deploys with the `SHARE` binding. Until the lock is committed the job only prints the plan (`bynk deploy --dry-run`), on pull requests too.
 
-Things to know: the Worker is named `snippets` (the Bynk context's name) in your account; `POST /api/snippets` is open to anyone who can reach it and writes to KV, bounded by the 64 KiB `Source` refinement and the 30-day expiry, and rate limited by the app Worker to 10 creates a minute per client address (the `SHARE_LIMIT` binding; over the limit answers `429` and the app falls back to the self-contained link; reads are not limited). The Worker has no public address of its own: `share/bynk.toml` sets `[workers] workers_dev = false`, so the generated `wrangler.toml` takes it off `workers.dev` on every deploy, including a `bynk deploy` run by hand.
+Things to know: the Worker is named `snippets` (the Bynk context's name) in your account; `POST /api/snippets` is open to anyone who can reach it and writes to KV, bounded by the 64 KiB `Source` refinement and the 30-day expiry, and rate limited by the app Worker to 10 creates a minute per client address (the `SHARE_LIMIT` binding; over the limit answers `429` and the app falls back to the self-contained link; reads are not limited). The Worker has no public address of its own: `share/bynk.toml` sets `[workers] workers_dev = false`, so the generated `wrangler.toml` takes it off `workers.dev` on every deploy, including a `bynk deploy` run by hand. CI then reads the Worker's `/subdomain` state (read-only, retried) and fails if the route or preview URLs are on.
 
 ## Highlighting
 
