@@ -1,7 +1,5 @@
 commons ids
 
-const SNIPPET_TTL: Duration = 30.days
-
 ---
 A snippet id: 6–12 url-safe characters. Every `SnippetId` that exists has already
 passed this check, so it can be used as a KV key without re-validation. A refined
@@ -34,13 +32,20 @@ fn keyOf(id: SnippetId) -> String {
 }
 
 ---
-How long a shared snippet is retained, in seconds, from the moment it is
-created: 30 days. A playground share link is meant for showing someone a
-program, not permanent storage — an unbounded KV namespace is unbounded
-storage cost and an unbounded abuse surface (issue #398). Fixed at creation,
-not refreshed on read: a link that is still being read is still within the
-window for the vast majority of shares, and a sliding window would mean a
-frequently-viewed link never expires, defeating the bound.
+How long a shared snippet is retained from the moment it is created: 30 days. A
+playground share link is meant for showing someone a program, not permanent
+storage — an unbounded KV namespace is unbounded storage cost and an unbounded
+abuse surface (issue #398). Fixed at creation, not refreshed on read: a link that
+is still being read is still within the window for the vast majority of shares,
+and a sliding window would mean a frequently-viewed link never expires, defeating
+the bound.
+---
+const SNIPPET_TTL: Duration = 30.days
+
+---
+`SNIPPET_TTL` in seconds, which is what `Kv.putTtl` takes. Written as
+`toMillis() / 1000` until `Duration` has `toSeconds()` and `putTtl` accepts a
+`Duration` (bynk-lang/bynk#3771).
 ---
 fn snippetTtlSeconds() -> Int {
 	SNIPPET_TTL.toMillis() / 1000
