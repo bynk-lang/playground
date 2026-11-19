@@ -90,8 +90,8 @@ function linkGraph(files: EmittedFile[]): { entry: string | null; kind: EntryKin
 
 // The Worker bootstrap (a classic script, instantiated from a blob): imports the linked
 // entry, instantiates the composition root (or, with no capabilities, the context's own
-// surface), invokes the single zero-argument
-// service handler, and reports captured logs + the returned value. Console output
+// surface), invokes the `call` handler of `service playground` (and of no other service),
+// and reports captured logs + the returned value. Console output
 // (the `Logger` provider) is intercepted in-Worker.
 // Each log line is posted as it is written, not held until the end, so a run that times
 // out still reports what it logged before it hung (#28). The final message has `done`.
@@ -114,8 +114,17 @@ self.onmessage = async (e) => {
       return;
     }
     const app = make();
-    // Arguments (#82): call the named service's handler with them, after each has passed
-    // its refinements, checked with the compiled type's own \`of\`.
+    // The one entry is \`service playground { on call(…) … }\`: the surface is keyed by service
+    // name, so look that name up and nothing else. No other service is ever called.
+    let fn = null;
+    for (const ctxKey of Object.keys(app)) {
+      const surface = app[ctxKey];
+      if (surface && typeof surface === "object" && typeof surface.playground === "function") { fn = surface.playground; break; }
+    }
+    if (!fn) { self.postMessage({ done: true, noEntry: true }); return; }
+    // Arguments (#82): call it with them, after each has passed its refinements, checked
+    // with the compiled type's own \`of\`.
+    let args = [];
     if (call) {
       const ctx = contextUrl ? await import(contextUrl) : {};
       for (let i = 0; i < call.checks.length; i++) {
@@ -128,35 +137,13 @@ self.onmessage = async (e) => {
           }
         }
       }
-      let fn = null;
-      for (const ctxKey of Object.keys(app)) {
-        const surface = app[ctxKey];
-        if (surface && typeof surface === "object" && typeof surface[call.service] === "function") fn = surface[call.service];
-      }
-      if (!fn) { self.postMessage({ done: true, noEntry: true }); return; }
-      if (fn.length !== call.args.length) {
-        self.postMessage({ done: true, argError: "the handler takes " + fn.length + " argument(s), but the Arguments row read " + call.args.length });
-        return;
-      }
-      const value = await fn(...call.args);
-      self.postMessage({ done: true, value: value === undefined ? undefined : fmt(value) });
+      args = call.args;
+    }
+    if (fn.length !== args.length) {
+      self.postMessage({ done: true, argError: "the handler takes " + fn.length + " argument(s), but the Arguments row read " + args.length });
       return;
     }
-    let invoked = false, value;
-    for (const ctxKey of Object.keys(app)) {
-      const surface = app[ctxKey];
-      if (!surface || typeof surface !== "object") continue;
-      for (const m of Object.keys(surface)) {
-        const fn = surface[m];
-        if (typeof fn === "function" && fn.length === 0) {
-          invoked = true;
-          value = await fn();
-          break;
-        }
-      }
-      if (invoked) break;
-    }
-    if (!invoked) { self.postMessage({ done: true, noEntry: true }); return; }
+    const value = await fn(...args);
     self.postMessage({ done: true, value: value === undefined ? undefined : fmt(value) });
   } catch (err) {
     self.postMessage({ done: true, error: String((err && err.stack) || err) });

@@ -522,7 +522,9 @@ function renderOutput(): void {
     return;
   }
   if (reply.noEntry) {
-    whyNote("Compiled. No service handler to run: add `on call() -> …` to see output.");
+    const others = signature.kind === "none" ? signature.others : [];
+    const seen = others.length > 0 ? ` Run does not call ${others.map((o) => `\`${o}\``).join(", ")}: rename the service you want to run to \`playground\`.` : "";
+    whyNote(`Compiled. Run calls only \`service playground { on call() … }\`, and this program has none.${seen}`);
     return;
   }
   if (reply.error) {
@@ -550,12 +552,12 @@ function showUnsupported(diags: Diagnostic[]): void {
 }
 
 // --- Arguments (#82) ------------------------------------------------------------
-// When no service handler takes zero arguments, the first service's `on call(…)` is the
-// entry, and a row above the results takes its arguments, one field per parameter.
+// `service playground`'s `on call(…)` is the entry. When it takes arguments, a row above the
+// results takes them, one field per parameter.
 // Values are kept by parameter name, so they survive edits to the program, and a shared
 // link carries them as `?args=`.
 let argValues: Record<string, FieldValue> = decodeArgs(new URLSearchParams(location.search).get("args"));
-let signature: EntrySignature = { kind: "none" };
+let signature: EntrySignature = { kind: "none", others: [] };
 // The parameter list the row was last built for, so typing in the editor doesn't rebuild
 // it (and steal focus) unless the signature itself changed.
 let argsBuiltFor = "";
@@ -613,7 +615,7 @@ function scheduleArgs(): void {
 }
 
 // The call to make, an error to show instead of running (a field that isn't a value of its
-// type, or a type that can't be entered), or nothing: the zero-argument handler runs as always.
+// type, or a type that can't be entered), or nothing: a handler with no arguments runs as it is.
 function readCall(): { call?: RunCall; error?: string } {
   if (signature.kind !== "params") return {};
   const args: unknown[] = [];
@@ -623,7 +625,7 @@ function readCall(): { call?: RunCall; error?: string } {
     args.push(r.value);
   }
   return {
-    call: { service: signature.service, args, checks: signature.params.map((p) => ({ name: p.name, refines: p.refines })) },
+    call: { args, checks: signature.params.map((p) => ({ name: p.name, refines: p.refines })) },
   };
 }
 

@@ -43,13 +43,13 @@ export const TOUR: TourStep[] = [
     id: "run",
     title: "Run a service",
     prose:
-      "A Bynk program is a `context` holding `service`s. This one logs a line and returns a `String`. The result appears on the right as `⇒`.",
+      "A Bynk program is a `context` holding `service`s. This one logs a line and returns a `String`. The result appears on the right as `⇒`. Run always calls the service named `playground`, so keep that name for whatever you want to run: it is the playground's entry point, not a Bynk keyword.",
     task: "Change the returned string so it greets you instead of the world, then press Check.",
     starter: `context tour.run
 
 consumes bynk { Logger }
 
-service greet {
+service playground {
 	on call() -> Effect[String] given Logger {
 		let _ <- Logger.info("Greeting someone")
 		"Hello, world"
@@ -60,7 +60,7 @@ service greet {
 
 consumes bynk { Logger }
 
-service greet {
+service playground {
 	on call() -> Effect[String] given Logger {
 		let _ <- Logger.info("Greeting someone")
 		"Hello, Ada"
@@ -85,7 +85,7 @@ service greet {
 
 consumes bynk { Logger }
 
-service roll {
+service playground {
 	on call() -> Effect[Int] given Logger {
 		let _ <- Logger.info("Rolling a d6...")
 		let n <- Random.int(1, 7)
@@ -97,7 +97,7 @@ service roll {
 
 consumes bynk { Random, Logger }
 
-service roll {
+service playground {
 	on call() -> Effect[Int] given Random, Logger {
 		let _ <- Logger.info("Rolling a d6...")
 		let n <- Random.int(1, 7)
@@ -124,7 +124,7 @@ type Point = {
 	y: Int,
 }
 
-service make {
+service playground {
 	on call() -> Effect[Point] {
 		Point {
 			x: 3,
@@ -140,7 +140,7 @@ type Point = {
 	y: Int,
 }
 
-service make {
+service playground {
 	on call() -> Effect[Point] {
 		Point {
 			x: 10,
@@ -170,7 +170,7 @@ service make {
 
 type Light = enum { Red, Green, Yellow }
 
-service next {
+service playground {
 	on call() -> Effect[String] {
 		match Yellow {
 			Red => "stop",
@@ -183,7 +183,7 @@ service next {
 
 type Light = enum { Red, Green, Yellow }
 
-service next {
+service playground {
 	on call() -> Effect[String] {
 		match Yellow {
 			Red => "stop",
@@ -206,7 +206,7 @@ service next {
 
 type Slug = String where Matches("[a-z]+")
 
-service check {
+service playground {
 	on call() -> Effect[Bool] {
 		match Slug.of("Hello World") {
 			Ok(_) => true,
@@ -219,7 +219,7 @@ service check {
 
 type Slug = String where Matches("[a-z]+")
 
-service check {
+service playground {
 	on call() -> Effect[Bool] {
 		match Slug.of("hello") {
 			Ok(_) => true,
@@ -243,7 +243,7 @@ fn grade(score: Int) -> String {
 	"fail"
 }
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		grade(72)
 	}
@@ -255,7 +255,7 @@ fn grade(score: Int) -> String {
 	if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
 }
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		grade(72)
 	}
@@ -272,7 +272,7 @@ service run {
     task: "Cover the missing `None` case, returning `\"empty\"`.",
     starter: `context tour.option
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		let xs = [3, 8, 12]
 		match xs.first() {
@@ -283,7 +283,7 @@ service run {
 `,
     solution: `context tour.option
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		let xs = [3, 8, 12]
 		match xs.first() {
@@ -311,7 +311,7 @@ fn parseAge(s: String) -> Result[Int, String] {
 	}
 }
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		match parseAge("-5") {
 			Ok(n) => "age \\(n)",
@@ -328,7 +328,7 @@ fn parseAge(s: String) -> Result[Int, String] {
 	}
 }
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		match parseAge("-5") {
 			Ok(n) => "age \\(n)",
@@ -360,7 +360,7 @@ fn nextAge(s: String) -> Result[Int, String] {
 	Ok(n + 1)
 }
 
-service run {
+service playground {
 	on call() -> Effect[Int] {
 		match nextAge("41") {
 			Ok(n) => n,
@@ -383,7 +383,7 @@ fn nextAge(s: String) -> Result[Int, String] {
 	Ok(n + 1)
 }
 
-service run {
+service playground {
 	on call() -> Effect[Int] {
 		match nextAge("41") {
 			Ok(n) => n,

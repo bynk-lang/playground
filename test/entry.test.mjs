@@ -19,7 +19,7 @@ const NO_CAPABILITY = `context demo.records
 
 type Point = { x: Int, y: Int }
 
-service make {
+service playground {
   on call() -> Effect[Point] {
     Point { x: 3, y: 4 }
   }
@@ -31,7 +31,7 @@ consumes bynk { Logger }
 
 type Point = { x: Int, y: Int }
 
-service make {
+service playground {
   on call() -> Effect[Point] given Logger {
     Point { x: 3, y: 4 }
   }
@@ -69,4 +69,15 @@ test("a program with no service has nothing to run, and says so rather than fail
   const r = await runSource(NO_HANDLER, "entry");
   assert.ok(r.ok);
   assert.equal(r.noEntry, true);
+});
+
+test("only `service playground` runs; another service, however it is named or placed, does not", async () => {
+  const handler = (name, v) => `service ${name} {\n  on call() -> Effect[Int] {\n    ${v}\n  }\n}\n`;
+  const head = "context demo.pick\n\n";
+  const first = await runSource(head + handler("other", "1") + "\n" + handler("playground", "2"), "entry");
+  assert.ok(first.ok, String(first.errors));
+  assert.equal(first.value, "2", "playground runs even when another service comes first");
+  const none = await runSource(head + handler("other", "1") + "\n" + handler("another", "3"), "entry");
+  assert.ok(none.ok, String(none.errors));
+  assert.equal(none.noEntry, true, "a zero-argument handler in a differently named service is not run");
 });

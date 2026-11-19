@@ -6,7 +6,8 @@
 // is just the context module and `runtime.js`, and the context module itself exports
 // `__makeSurface(deps)`. Both must run, so the entry is chosen from what was emitted
 // rather than assumed to be `compose.js` (which made a capability-free program report
-// "No zero-argument service handler" while having one).
+// "No zero-argument service handler" while having one). The entry handler itself is
+// always `service playground`'s `call` (sandbox.ts).
 
 export type EntryKind = "compose" | "surface";
 

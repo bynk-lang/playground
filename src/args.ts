@@ -1,5 +1,5 @@
 // Arguments for a run (#82): when no service handler takes zero arguments, Run calls the
-// first service's `on call(…)` with values typed into the Arguments row.
+// `service playground`'s `on call(…)` with values typed into the Arguments row.
 //
 // The compiler's wasm API doesn't report a handler's signature, so it is read from the
 // source here: a small scanner that blanks out comments and strings, then reads the
@@ -25,12 +25,16 @@ export interface Param {
 }
 
 export type EntrySignature =
-  /// No service handler at all.
-  | { kind: "none" }
-  /// A zero-argument handler: Run calls it as it always has.
+  /// No `service playground` with an `on call`. `others` are the services that do have one,
+  /// which Run will not call.
+  | { kind: "none"; others: string[] }
+  /// `service playground`'s `on call()`, which takes no arguments.
   | { kind: "zero" }
-  /// The first service's `on call(…)`, which takes arguments.
-  | { kind: "params"; service: string; params: Param[] };
+  /// `service playground`'s `on call(…)`, which takes arguments.
+  | { kind: "params"; params: Param[] };
+
+/// The one service Run calls. Nothing else is ever the entry.
+export const ENTRY_SERVICE = "playground";
 
 const PRIMITIVES: Record<string, InputKind> = { String: "string", Int: "int", Float: "float", Bool: "bool" };
 
@@ -107,7 +111,7 @@ function splitTopLevel(text: string): string[] {
   return parts.map((p) => p.trim()).filter((p) => p !== "");
 }
 
-/// The run's entry, read from the source.
+/// The run's entry, read from the source: `service playground`'s `on call`.
 export function entrySignature(source: string): EntrySignature {
   const text = mask(source);
   // `type Slug = String where …`: a refinement, and the type it refines.
@@ -126,10 +130,10 @@ export function entrySignature(source: string): EntrySignature {
       handlers.push({ service: svc[1], params: splitTopLevel(body.slice(paren + 1, close - 1)) });
     }
   }
-  if (handlers.length === 0) return { kind: "none" };
-  if (handlers.some((h) => h.params.length === 0)) return { kind: "zero" };
+  const first = handlers.find((h) => h.service === ENTRY_SERVICE);
+  if (!first) return { kind: "none", others: [...new Set(handlers.map((h) => h.service))] };
+  if (first.params.length === 0) return { kind: "zero" };
 
-  const first = handlers[0];
   const params = first.params.map((p): Param => {
     const colon = p.indexOf(":");
     const name = (colon === -1 ? p : p.slice(0, colon)).trim();
@@ -142,7 +146,7 @@ export function entrySignature(source: string): EntrySignature {
     }
     return { name, type, input: PRIMITIVES[base] ?? null, refines };
   });
-  return { kind: "params", service: first.service, params };
+  return { kind: "params", params };
 }
 
 export type FieldValue = string | boolean;

@@ -1,5 +1,5 @@
 // The playground examples gallery (in-browser track, slice 5a). Each is a small,
-// **runnable** in-process (Bundle) program with a zero-argument `on call()` entry, so
+// **runnable** in-process (Bundle) program with a `service playground { on call() … }` entry, so
 // picking one and pressing Run produces output. Every example here is verified to
 // compile and run in the in-process subset (the gallery never offers a snippet that
 // would error on Run). The existing `examples/` apps are full Workers/agent programs
@@ -33,7 +33,7 @@ export const EXAMPLES: Example[] = [
 
 consumes bynk { Logger }
 
-service greet {
+service playground {
 	on call() -> Effect[String] given Logger {
 		let _ <- Logger.info("Hello from Bynk!")
 		"Hello from Bynk!"
@@ -51,7 +51,7 @@ service greet {
 
 consumes bynk { Random, Logger }
 
-service roll {
+service playground {
 	on call() -> Effect[Int] given Random, Logger {
 		let _ <- Logger.info("Rolling a d6...")
 		let n <- Random.int(1, 7)
@@ -72,7 +72,7 @@ type Point = {
 	y: Int,
 }
 
-service make {
+service playground {
 	on call() -> Effect[Point] {
 		Point {
 			x: 3,
@@ -97,7 +97,7 @@ type Point = {
 	y: Int,
 }
 
-service make {
+service playground {
 	on call() -> Effect[Point] given Logger {
 		let _ <- Logger.info("Building a point")
 		Point {
@@ -120,7 +120,7 @@ consumes bynk { Logger }
 
 type Light = enum { Red, Green, Yellow }
 
-service next {
+service playground {
 	on call() -> Effect[String] given Logger {
 		let _ <- Logger.info("The light is green")
 		match Green {
@@ -151,7 +151,7 @@ fn area(s: Shape) -> Int {
 	}
 }
 
-service run {
+service playground {
 	on call() -> Effect[Int] {
 		area(Rect(3, 4))
 	}
@@ -170,7 +170,7 @@ consumes bynk { Logger }
 
 type Slug = String where Matches("[a-z]+")
 
-service check {
+service playground {
 	on call() -> Effect[Bool] given Logger {
 		let _ <- Logger.info("Is \\"hello\\" a valid slug?")
 		match Slug.of("hello") {
@@ -193,7 +193,7 @@ fn grade(score: Int) -> String {
 	if score >= 90 { "A" } else { if score >= 50 { "pass" } else { "fail" } }
 }
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		grade(72)
 	}
@@ -207,7 +207,7 @@ service run {
     blurb: "Collapse a list to one value with a function.",
     source: `context demo.lists
 
-service run {
+service playground {
 	on call() -> Effect[Int] {
 		let xs = [1, 2, 3, 4]
 		xs.fold(0, (acc, x) => acc + x)
@@ -226,7 +226,7 @@ fn initials(name: String) -> String {
 	name.split(" ").map((w) => w.slice(0, 1).toUpper()).fold("", (acc, c) => acc.concat(c))
 }
 
-service text {
+service playground {
 	on call() -> Effect[String] {
 		let name = "  ada lovelace  ".trim()
 		let shout = name.toUpper()
@@ -256,7 +256,7 @@ fn tally(words: List[String]) -> Map[String, Int] {
 	words.fold(empty, bump)
 }
 
-service count {
+service playground {
 	on call() -> Effect[Int] given Logger {
 		let counts = tally(["red", "blue", "red", "green", "red"])
 		let _ <- Logger.info("colours seen: ".concat(counts.keys().length().toString()))
@@ -292,7 +292,7 @@ fn factorial(n: Int) -> Int {
 	if n <= 1 { 1 } else { n * factorial(n - 1) }
 }
 
-service calc {
+service playground {
 	on call() -> Effect[Int] {
 		eval(Add(Num(factorial(3)), Mul(Num(2), Num(10))))
 	}
@@ -307,7 +307,7 @@ service calc {
     blurb: "No null: a value that may be missing is an Option.",
     source: `context demo.option
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		let xs = [3, 8, 12]
 		match xs.first() {
@@ -333,7 +333,7 @@ fn parseAge(s: String) -> Result[Int, String] {
 	}
 }
 
-service run {
+service playground {
 	on call() -> Effect[String] {
 		match parseAge("-5") {
 			Ok(n) => "age \\(n)",
@@ -363,7 +363,7 @@ fn nextAge(s: String) -> Result[Int, String] {
 	Ok(n + 1)
 }
 
-service run {
+service playground {
 	on call() -> Effect[Int] {
 		match nextAge("41") {
 			Ok(n) => n,

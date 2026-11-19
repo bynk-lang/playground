@@ -67,14 +67,13 @@ export interface RunRequest {
   files: EmittedFile[];
   /// Wall-clock budget; the Worker is terminated past it.
   timeoutMs: number;
-  /// When the entry takes arguments (#82): the service whose handler to call, the
-  /// arguments in order, and the refinements each must pass (checked with the compiled
-  /// type's `of`). Absent: call the zero-argument handler, as always.
+  /// When the entry takes arguments (#82): the arguments in
+  /// order, and the refinements each must pass (checked with the compiled type's `of`). Absent: call `service playground`'s zero-argument handler.
   call?: RunCall;
 }
 
 export interface RunCall {
-  service: string;
+  /// The entry is always `service playground`, so no service is named here.
   args: unknown[];
   checks: { name: string; refines: string[] }[];
 }
@@ -91,7 +90,7 @@ export interface RunReply {
   error?: string;
   /// True when the Worker hit the wall-clock budget and was terminated.
   timedOut?: boolean;
-  /// True when the graph had no zero-argument entry to invoke.
+  /// True when the graph had no `service playground` handler to invoke.
   noEntry?: boolean;
   /// An argument the handler can't take: it failed a refinement, or the handler takes a
   /// different number of arguments than were read from its signature.
