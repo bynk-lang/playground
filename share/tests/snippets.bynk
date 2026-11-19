@@ -1,4 +1,6 @@
 suite snippets {
+	consumes bynk { Random }
+
 	case "a shared snippet gets a twelve-character id and reads back" {
 		let created <- api.POST(
 			"/api/snippets",

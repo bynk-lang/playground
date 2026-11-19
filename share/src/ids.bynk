@@ -1,5 +1,7 @@
 commons ids
 
+const SNIPPET_TTL: Duration = 30.days
+
 ---
 A snippet id: 6–12 url-safe characters. Every `SnippetId` that exists has already
 passed this check, so it can be used as a KV key without re-validation. A refined
@@ -41,5 +43,5 @@ window for the vast majority of shares, and a sliding window would mean a
 frequently-viewed link never expires, defeating the bound.
 ---
 fn snippetTtlSeconds() -> Int {
-	2592000
+	SNIPPET_TTL.toMillis() / 1000
 }

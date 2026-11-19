@@ -28,19 +28,15 @@ service api from http {
 		body: CreateRequest
 	) -> Effect[HttpResult[CreatedView]] by Visitor given Random, Kv {
 		let uuid <- Random.uuid()
-		match SnippetId.of(idFromUuid("\(uuid)")) {
-			Err(_) => ServerError("could not generate an id"),
-			Ok(id) => {
-				let existing <- Kv.get(keyOf(id))
-				match existing {
-					Some(_) => ServerError("could not generate an unused id"),
-					None => {
-						let _ <- Kv.putTtl(keyOf(id), body.source, snippetTtlSeconds())
-						Created(CreatedView { id: id })
-					},
-				}
-			},
+		let Ok(id) = SnippetId.of(idFromUuid("\(uuid)")) else {
+			ServerError("could not generate an id")
 		}
+		let existing <- Kv.get(keyOf(id))
+		let Some(_) = existing else {
+			let _ <- Kv.putTtl(keyOf(id), body.source, snippetTtlSeconds())
+			Created(CreatedView { id: id })
+		}
+		ServerError("could not generate an unused id")
 	}
 
 	// Fetch a shared snippet by id: `200 OK` with its source, or `404` if the id is
