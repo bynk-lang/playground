@@ -1096,3 +1096,10 @@ test("a program with no `service playground` says Run calls only that, and names
   assert.match(out, /Run calls only/);
   assert.match(out, /does not call `greet`/);
 });
+
+test("the `playground` service runs even when another service is declared before it", { skip }, async () => {
+  share.store.set("second", "context demo.s\n\nservice other {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n\nservice playground {\n\ton call() -> Effect[Int] {\n\t\t2\n\t}\n}\n");
+  await fresh("?s=second");
+  await page.waitFor(`/⇒ 2/.test(document.getElementById("output").textContent)`, "playground's value");
+  assert.doesNotMatch(await page.text("#output"), /⇒ 1/);
+});

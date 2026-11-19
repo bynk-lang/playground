@@ -625,7 +625,7 @@ function readCall(): { call?: RunCall; error?: string } {
     args.push(r.value);
   }
   return {
-    call: { service: signature.service, args, checks: signature.params.map((p) => ({ name: p.name, refines: p.refines })) },
+    call: { args, checks: signature.params.map((p) => ({ name: p.name, refines: p.refines })) },
   };
 }
 

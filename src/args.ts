@@ -31,7 +31,7 @@ export type EntrySignature =
   /// `service playground`'s `on call()`, which takes no arguments.
   | { kind: "zero" }
   /// `service playground`'s `on call(…)`, which takes arguments.
-  | { kind: "params"; service: string; params: Param[] };
+  | { kind: "params"; params: Param[] };
 
 /// The one service Run calls. Nothing else is ever the entry.
 export const ENTRY_SERVICE = "playground";
@@ -146,7 +146,7 @@ export function entrySignature(source: string): EntrySignature {
     }
     return { name, type, input: PRIMITIVES[base] ?? null, refines };
   });
-  return { kind: "params", service: first.service, params };
+  return { kind: "params", params };
 }
 
 export type FieldValue = string | boolean;

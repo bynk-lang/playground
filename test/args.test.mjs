@@ -19,7 +19,6 @@ test("only `service playground` is the entry, whatever else is declared", () => 
   const two = `context demo.t\n\nservice a {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n\nservice playground {\n\ton call(n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n`;
   const sig = entrySignature(two);
   assert.equal(sig.kind, "params");
-  assert.equal(sig.service, "playground");
   // A zero-argument handler in another service is not an entry.
   const other = `context demo.t\n\nservice a {\n\ton call() -> Effect[Int] {\n\t\t1\n\t}\n}\n\nservice b {\n\ton call() -> Effect[Int] {\n\t\t2\n\t}\n}\n`;
   assert.deepEqual(entrySignature(other), { kind: "none", others: ["a", "b"] });
@@ -32,7 +31,6 @@ test("no service handler at all", () => {
 test("the playground service's parameters, with the field each one gets", () => {
   const sig = entrySignature(program("\ton call(name: String, times: Int, ratio: Float, loud: Bool) -> Effect[String] {\n\t\tname\n\t}"));
   assert.equal(sig.kind, "params");
-  assert.equal(sig.service, "playground");
   assert.deepEqual(
     sig.params.map((p) => [p.name, p.type, p.input]),
     [
@@ -82,7 +80,6 @@ service playground {
 }
 `;
   const sig = entrySignature(src);
-  assert.equal(sig.service, "playground");
   assert.deepEqual(sig.params.map((p) => p.name), ["name"]);
   assert.equal(mask('let s = "a \\" b"').length, 'let s = "a \\" b"'.length, "masking keeps offsets");
 });

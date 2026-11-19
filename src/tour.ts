@@ -43,7 +43,7 @@ export const TOUR: TourStep[] = [
     id: "run",
     title: "Run a service",
     prose:
-      "A Bynk program is a `context` holding `service`s. This one logs a line and returns a `String`. The result appears on the right as `⇒`.",
+      "A Bynk program is a `context` holding `service`s. This one logs a line and returns a `String`. The result appears on the right as `⇒`. Run always calls the service named `playground`, so keep that name for whatever you want to run: it is the playground's entry point, not a Bynk keyword.",
     task: "Change the returned string so it greets you instead of the world, then press Check.",
     starter: `context tour.run
 

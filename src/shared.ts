@@ -67,14 +67,13 @@ export interface RunRequest {
   files: EmittedFile[];
   /// Wall-clock budget; the Worker is terminated past it.
   timeoutMs: number;
-  /// When the entry takes arguments (#82): the service whose handler to call, the
-  /// arguments in order, and the refinements each must pass (checked with the compiled
-  /// type's `of`). Absent: call `service playground`'s zero-argument handler.
+  /// When the entry takes arguments (#82): the arguments in
+  /// order, and the refinements each must pass (checked with the compiled type's `of`). Absent: call `service playground`'s zero-argument handler.
   call?: RunCall;
 }
 
 export interface RunCall {
-  service: string;
+  /// The entry is always `service playground`, so no service is named here.
   args: unknown[];
   checks: { name: string; refines: string[] }[];
 }
