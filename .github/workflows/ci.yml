@@ -97,7 +97,7 @@ jobs:
             echo "live=false" >> "$GITHUB_OUTPUT"
           fi
       # The API token reaches only this step (the action sets it for `bynk deploy`) and the
-      # workers.dev step after it.
+      # check after it.
       - name: Deploy the share service
         id: deploy
         if: steps.mode.outputs.live == 'true'
@@ -107,27 +107,25 @@ jobs:
           working-directory: share
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      # #25: the share service is reached only through the app Worker's service binding,
-      # whose rate limit a public address would bypass. bynk deploy's wrangler.toml sets
-      # neither `routes` nor `workers_dev` (and bynk.toml has no key for it), so Wrangler
-      # turns the workers.dev route and preview URLs back on at every deploy: turn both
-      # off again, even after a deploy that failed partway, and fail if they stay on.
-      - name: Turn off the share service's workers.dev route
-        if: ${{ !cancelled() && steps.mode.outputs.live == 'true' }}
+      # #25: bynk.toml sets workers_dev = false, and preview URLs are left to Wrangler's
+      # default, so check both really are off. Read-only; retried because the API can lag
+      # just after a deploy.
+      - name: Check the share service has no public address
+        if: steps.deploy.outcome == 'success'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WORKER: snippets
         run: |
           url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$WORKER/subdomain"
-          api() { curl -sS --retry 3 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$@" "$url"; }
-          api -X POST -H "Content-Type: application/json" --data '{"enabled":false,"previews_enabled":false}' >/dev/null
-          state=$(api)
+          for _ in 1 2 3 4 5 6; do
+            state=$(curl -sS --retry 3 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$url")
+            if [ "$(echo "$state" | jq '.success and .result.enabled == false and .result.previews_enabled == false')" = true ]; then exit 0; fi
+            sleep 10
+          done
           echo "$state" | jq -c '{success, result}'
-          if [ "$(echo "$state" | jq '.success and .result.enabled == false and .result.previews_enabled == false')" != true ]; then
-            echo "::error::The $WORKER Worker's workers.dev route or preview URLs are still on, so share requests can skip the app's rate limit (#25)."
-            exit 1
-          fi
+          echo "::error::The $WORKER Worker's workers.dev route or preview URLs are still on, so share requests can skip the app's rate limit (#25)."
+          exit 1
       - name: Plan the share service
         if: steps.mode.outputs.live != 'true'
         uses: bynk-lang/bynk-deploy@422b47aeb37ba7ad0d8ba1f87755ae7e422dc462 # v2.2.2

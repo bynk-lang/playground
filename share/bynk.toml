@@ -6,3 +6,9 @@ version = "0.1.0"
 
 [paths]
 include = ["src", "tests"]
+
+# #25: the share service is reached only through the app Worker's service binding, whose
+# rate limit a public address would bypass. Without this, Wrangler leaves the workers.dev
+# route (and, by default, preview URLs) on at every deploy.
+[workers]
+workers_dev = false
