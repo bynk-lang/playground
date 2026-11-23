@@ -42,18 +42,27 @@ export function mountGallery(opts: {
   const empty = document.getElementById("gallery-empty")!;
   const opener = document.getElementById("examples")!;
 
+  // A card is one button. Its name is the title and its description the blurb; the code
+  // peek is for the eye only; read out, it made every card's name about 190 characters.
+  let cardSeq = 0;
   const makeCard = (titleText: string, blurbText: string, source: string, onClick: () => void): HTMLElement => {
+    const id = `card-${++cardSeq}`;
     const card = document.createElement("button");
     card.className = "card";
     card.type = "button";
+    card.setAttribute("aria-labelledby", `${id}-title`);
+    card.setAttribute("aria-describedby", `${id}-blurb`);
     const title = document.createElement("div");
     title.className = "card-title";
+    title.id = `${id}-title`;
     title.textContent = titleText;
     const blurb = document.createElement("div");
     blurb.className = "card-blurb";
+    blurb.id = `${id}-blurb`;
     blurb.textContent = blurbText;
     const code = document.createElement("pre");
     code.className = "card-peek";
+    code.setAttribute("aria-hidden", "true");
     code.textContent = peek(source);
     card.append(title, blurb, code);
     card.addEventListener("click", onClick);
@@ -86,6 +95,8 @@ export function mountGallery(opts: {
           card.setAttribute("aria-current", "true");
           const tag = document.createElement("div");
           tag.className = "card-current";
+          // Drawn for the eye; aria-current says it to a screen reader.
+          tag.setAttribute("aria-hidden", "true");
           tag.textContent = "✓ Current";
           card.append(tag);
         }
@@ -101,7 +112,9 @@ export function mountGallery(opts: {
         const practise = document.createElement("button");
         practise.type = "button";
         practise.className = "link card-tour";
-        practise.textContent = `Practise this in the tour (step ${step.number}) ›`;
+        const chevron = Object.assign(document.createElement("span"), { textContent: "›" });
+        chevron.setAttribute("aria-hidden", "true");
+        practise.append(`Practise this in the tour (step ${step.number}) `, chevron);
         practise.addEventListener("click", () => {
           dialog.close();
           opts.onTour(ex.tour!);

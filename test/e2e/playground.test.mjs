@@ -60,6 +60,8 @@ async function fresh(path = "") {
 }
 
 const SCRATCH = "// scratch\n";
+// The tour's step ids, in order (src/tour.ts).
+const TOUR_IDS = [...readFileSync(new URL("../../src/tour.ts", import.meta.url), "utf8").matchAll(/^    id: "([^"]+)",$/gm)].map((m) => m[1]);
 
 test("the opening program runs by itself across the sandbox origin", { skip }, async () => {
   await fresh();
@@ -484,7 +486,9 @@ test("a handler that takes arguments runs with the values under Arguments, no ed
   // Run with them still empty says which one is missing.
   await page.click("#run");
   await page.waitFor(`document.getElementById("status").textContent === "check arguments"`, "the argument check");
-  assert.match(await page.text("#output"), /Can't call the handler: `times` needs a whole number/);
+  // The parameter's name is code, not wrapped in backticks a screen reader would read out.
+  assert.match(await page.text("#output"), /Can't call the handler: times needs a whole number/);
+  assert.equal(await page.eval(`document.querySelector("#output .out-error code")?.textContent`), "times");
 
   const run = async (want) => {
     await page.click("#run");
@@ -501,7 +505,7 @@ test("a handler that takes arguments runs with the values under Arguments, no ed
 
   // A value that fails its refinement is reported against the argument, not as a crash.
   await setArg("tag", "Hello");
-  await run(/Can't call the handler: `tag` must match \/\[a-z\]\+\/ \(Slug\)/);
+  await run(/Can't call the handler: tag must match \/\[a-z\]\+\/ \(Slug\)/);
   assert.equal(await page.text("#status"), "check arguments");
 
   // Enter in a field runs.
@@ -540,7 +544,7 @@ test("a handler whose argument can't be entered says so, rather than that there'
   share.store.set("point", "context demo.p\n\ntype Point = { x: Int, y: Int }\n\nservice playground {\n\ton call(p: Point, n: Int) -> Effect[Int] {\n\t\tn\n\t}\n}\n");
   await fresh("?s=point");
   assert.match(await page.text("#args"), /p: Point\s*can't be entered here yet/);
-  assert.match(await page.text("#output"), /Can't call the handler: a `Point` can't be entered here yet/);
+  assert.match(await page.text("#output"), /Can't call the handler: a Point can't be entered here yet/);
   assert.doesNotMatch(await page.text("#output"), /Run calls only/);
 });
 
@@ -1079,6 +1083,223 @@ test("on a phone the panes stack and nothing scrolls sideways", { skip }, async 
   }
 });
 
+// --- Accessibility review -------------------------------------------------------------
+
+const TYPE_ERROR = 'context demo.e\n\nservice playground {\n\ton call() -> Effect[Int] {\n\t\t1 + "a"\n\t}\n}\n';
+
+test("the editor has a name, and the toolbar's keyboard order is its order on screen", { skip }, async () => {
+  await fresh();
+  assert.equal(await page.eval(`document.querySelector(".cm-content").getAttribute("aria-label")`), "main.bynk, Bynk source");
+  // Every visible control in the header, in source (Tab) order, runs left to right.
+  const order = await page.eval(`[...document.querySelectorAll("header button, header a")]
+    .filter((e) => e.getClientRects().length && !e.closest("#learn-links, #coach"))
+    .map((e) => [e.id, e.getBoundingClientRect().left])`);
+  assert.deepEqual(order.map(([id]) => id), ["examples", "tour-btn", "learn-btn", "run", "format", "share", "theme"]);
+  for (let i = 1; i < order.length; i++) assert.ok(order[i][1] > order[i - 1][1], `${order[i][0]} is right of ${order[i - 1][0]}`);
+  // The symbols beside words are not read out.
+  assert.equal(await page.eval(`[...document.querySelectorAll("#run > span, #learn-btn > span")].every((s) => s.getAttribute("aria-hidden") === "true")`), true);
+  assert.equal(await page.eval(`document.getElementById("run-key").getAttribute("aria-hidden")`), "true");
+  // Logs is named "Logs, 1 line", not "Logs 1".
+  assert.equal(await page.text("#logs-count"), ", 1 line");
+  assert.equal(await page.eval(`document.getElementById("logs-badge").getAttribute("aria-hidden")`), "true");
+  // The panes have headings to jump between.
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll("main h2")].filter((h) => h.closest("#editor-pane, #results-pane")).map((h) => h.textContent)`), ["main.bynk", "Results"]);
+});
+
+test("the theme button says which theme is on", { skip }, async () => {
+  await fresh();
+  const pressed = () => page.eval(`document.getElementById("theme").getAttribute("aria-pressed")`);
+  const dark = () => page.eval(`document.documentElement.dataset.theme === "dark"`);
+  assert.equal(await page.eval(`document.getElementById("theme").getAttribute("aria-label")`), "Dark theme");
+  assert.equal(await pressed(), String(await dark()));
+  await page.click("#theme");
+  assert.equal(await pressed(), String(await dark()));
+});
+
+test("problems are reachable from the keyboard: the count jumps to the first, Ctrl+Shift+M lists them", { skip }, async () => {
+  share.store.set("typeerr", TYPE_ERROR);
+  await fresh("?s=typeerr");
+  await page.waitFor(`document.getElementById("diag-summary").dataset.kind === "error"`, "the live count");
+  assert.equal(await page.eval(`document.getElementById("diag-summary").tagName`), "BUTTON");
+  assert.equal(await page.eval(`document.getElementById("diag-summary").disabled`), false);
+  await page.eval(`document.getElementById("diag-summary").focus()`);
+  await page.click("#diag-summary");
+  assert.equal(await page.eval(`document.activeElement.classList.contains("cm-content")`), true, "focus is in the editor");
+  // At the `1 + "a"` on line 5.
+  assert.equal(await page.eval(`[...document.querySelectorAll(".cm-content .cm-line")].findIndex((l) => l.classList.contains("cm-activeLine")) + 1`), 5);
+  await page.key("m", { ctrl: true, shift: true });
+  await page.waitFor(`document.querySelector(".cm-panel-lint")`, "the list of problems");
+  assert.match(await page.text(".cm-panel-lint"), /operator \+ requires Int/);
+  // A clean program: nothing to go to.
+  await fresh();
+  await page.waitFor(`document.getElementById("diag-summary").dataset.kind === "ok"`, "no problems");
+  assert.equal(await page.eval(`document.getElementById("diag-summary").disabled`), true);
+});
+
+test("an error message's code words are code, not backticks", { skip }, async () => {
+  share.store.set("typeerr", TYPE_ERROR);
+  await fresh("?s=typeerr");
+  const jump = await page.text(".diag-jump");
+  assert.match(jump, /operator \+ requires Int or Float operands; right operand has type String/);
+  assert.doesNotMatch(jump, /`/);
+  assert.deepEqual(await page.eval(`[...document.querySelectorAll(".diag-jump code")].map((c) => c.textContent)`), ["+", "Int", "Float", "String"]);
+  assert.equal(await page.eval(`document.querySelector(".diag-sev span").getAttribute("aria-hidden")`), "true", "the ✕ isn't read out");
+});
+
+test("after an edit the status no longer says the last run's outcome", { skip }, async () => {
+  await fresh();
+  assert.equal(await status(), "ran");
+  await page.type("zzz ");
+  await page.waitFor(`document.getElementById("status").textContent === "edited since last run"`, "the edited status");
+  await page.click("#run");
+  await settled();
+  assert.match(await status(), /error/);
+});
+
+test("example cards are named by their title and described by their blurb; Recent comes first", { skip }, async () => {
+  await fresh();
+  await page.type(SCRATCH);
+  await page.click("#run");
+  await settled();
+  await page.click("#examples");
+  const card = await page.eval(`(() => {
+    const c = document.querySelector("#gallery-grid .card");
+    const ref = (attr) => c.getAttribute(attr).split(" ").map((id) => document.getElementById(id).textContent).join(" ");
+    return { name: ref("aria-labelledby"), description: ref("aria-describedby"), peekHidden: c.querySelector(".card-peek").getAttribute("aria-hidden") };
+  })()`);
+  assert.equal(card.name, "Hello, world");
+  assert.ok(card.description.length > 0);
+  assert.equal(card.peekHidden, "true");
+  // Recent is above the built-in examples.
+  assert.ok((await page.eval(`document.getElementById("recent-section").compareDocumentPosition(document.getElementById("gallery-grid")) & Node.DOCUMENT_POSITION_FOLLOWING`)) > 0);
+  assert.equal(await page.eval(`getComputedStyle(document.querySelector(".card-peek")).tabSize`), "2");
+  await page.eval(`document.getElementById("gallery").close()`);
+});
+
+test("the restored-snippet note goes away at the first edit", { skip }, async () => {
+  await fresh();
+  await page.type(SCRATCH);
+  await page.waitFor(`localStorage.getItem("bynk-draft")?.includes("// scratch")`, "the draft to be saved");
+  await page.goto(app.url);
+  await settled();
+  assert.equal(await page.visible("#restored-note"), true);
+  await page.type("// more\n");
+  assert.equal(await page.visible("#restored-note"), false);
+  // A run puts it away too, even one that doesn't compile.
+  await page.eval(`localStorage.setItem("bynk-draft", "zzz\\n")`);
+  await page.goto(app.url);
+  await settled();
+  assert.equal(await page.visible("#restored-note"), true);
+  await page.click("#run");
+  await settled();
+  assert.match(await status(), /error/);
+  assert.equal(await page.visible("#restored-note"), false);
+});
+
+test("a narrow embed stacks its panes, so the first run's output is in view", { skip }, async () => {
+  await page.setViewport(600, 480);
+  try {
+    await fresh("?embed=1");
+    assert.equal(await page.visible("#view-switch"), false);
+    assert.equal(await page.visible("#editor-pane"), true);
+    assert.equal(await page.visible("#results-pane"), true);
+    assert.match(await page.text("#output"), /Hello from Bynk!/);
+  } finally {
+    await page.setViewport(1512, 860);
+  }
+});
+
+test("a tour step opens with focus on its heading; a finished tour opens on its end card", { skip }, async () => {
+  await fresh();
+  await page.click("#tour-btn");
+  await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 1 of")`, "tour step 1");
+  assert.equal(await page.eval(`document.activeElement.id`), "tour-title");
+  assert.match(await page.text("#tour-prose"), /holding one or more services/);
+  await page.click("#tour-solution");
+  await page.click("#tour-check");
+  await page.waitFor(`document.getElementById("tour-feedback").dataset.kind === "ok"`, "step 1 passes");
+  await page.click("#tour-next");
+  assert.equal(await page.eval(`document.activeElement.id`), "tour-title", "not lost when Next is disabled");
+  await page.click("#tour-exit");
+
+  // Every step done: Tour shows the end card, with Start tour over, not step 1.
+  await page.eval(`localStorage.setItem("bynk-tour-done", JSON.stringify(${JSON.stringify(TOUR_IDS)}))`);
+  await page.goto(app.url);
+  await settled();
+  assert.equal(await page.eval(`document.getElementById("tour-btn").getAttribute("aria-label")`), "Tour, finished");
+  await page.click("#tour-btn");
+  assert.equal(await page.visible("#tour-end"), true);
+  assert.equal(await page.visible("#tour"), false);
+  assert.equal(await page.eval(`document.activeElement.id`), "tour-end-title");
+  await page.click("#tour-btn");
+  assert.equal(await page.visible("#tour-end"), false, "Tour again puts it away");
+});
+
+test("Share opens with focus on the link", { skip }, async () => {
+  await fresh();
+  await page.click("#share");
+  assert.equal(await page.eval(`document.activeElement.id`), "share-url");
+  await page.eval(`document.getElementById("share-sheet").close()`);
+});
+
+test("Keyboard and display lists the shortcuts and turns arrow ligatures on and off", { skip }, async () => {
+  await fresh();
+  const ligatures = () => page.eval(`getComputedStyle(document.querySelector(".cm-scroller")).fontVariantLigatures`);
+  assert.equal(await ligatures(), "none", "off by default");
+  await page.click("[data-keys]");
+  assert.equal(await page.eval(`document.getElementById("keys").open`), true);
+  assert.match(await page.text("#keys"), /F8/);
+  // Off everywhere code is drawn, not only in the editor: later `font` shorthands reset it.
+  assert.equal(await page.eval(`getComputedStyle(document.querySelector("#keys label code")).fontVariantLigatures`), "none");
+  await page.click("#ligatures");
+  assert.equal(await ligatures(), "contextual");
+  await page.goto(app.url);
+  await settled();
+  assert.equal(await ligatures(), "contextual", "the choice is kept");
+  assert.equal(await page.eval(`document.getElementById("ligatures").checked`), true);
+});
+
+test("on a phone one pane shows at a time: Run shows the result, a problem's location shows the code", { skip }, async () => {
+  await page.setViewport(390, 800);
+  try {
+    await fresh();
+    const shown = (id) => page.visible(id);
+    assert.equal(await shown("#view-switch"), true);
+    assert.equal(await shown("#editor-pane"), true);
+    assert.equal(await shown("#results-pane"), false);
+    assert.ok((await page.eval(`document.getElementById("editor").getBoundingClientRect().height`)) > 400, "the editor has the screen's height");
+    await page.click("#run");
+    await settled();
+    assert.equal(await shown("#results-pane"), true);
+    assert.equal(await shown("#editor-pane"), false);
+    assert.equal(await page.eval(`document.querySelector('#view-switch [data-view="result"]').getAttribute("aria-pressed")`), "true");
+    // Ctrl+Enter shows the result too, as the button does.
+    await page.click('#view-switch [data-view="code"]');
+    await page.type("");
+    await page.key("Enter", { ctrl: true });
+    await settled();
+    assert.equal(await shown("#results-pane"), true, "Ctrl+Enter shows the result");
+    // A broken program: the problem's location button goes back to the code.
+    await page.click('#view-switch [data-view="code"]');
+    await page.type("zzz ");
+    await page.click("#run");
+    await settled();
+    await page.click(".diag-jump");
+    assert.equal(await shown("#editor-pane"), true);
+    assert.equal(await page.eval(`document.activeElement.classList.contains("cm-content")`), true);
+    // The tour card stays in view with the code.
+    await page.click("#menu-btn");
+    await page.click("#tour-btn");
+    await page.waitFor(`document.getElementById("tour-count").textContent.includes("step 1 of")`, "tour step 1");
+    assert.equal(await shown("#tour"), true);
+    assert.equal(await shown("#editor-pane"), true);
+    // In the menu, Tab goes from the menu button into its items.
+    assert.equal(await page.eval(`document.getElementById("menu-btn").nextElementSibling.id`), "menu");
+  } finally {
+    await page.setViewport(1512, 860);
+  }
+});
+
 // Last, so it covers every flow above: the page did everything under its policy (#34).
 test("nothing the playground does is refused by its Content-Security-Policy", { skip }, async () => {
   await page.goto(app.url);
@@ -1094,7 +1315,8 @@ test("a program with no `service playground` says Run calls only that, and names
   await fresh("?s=notplay");
   const out = await page.text("#output");
   assert.match(out, /Run calls only/);
-  assert.match(out, /does not call `greet`/);
+  assert.match(out, /does not call greet/);
+  assert.ok((await page.eval(`[...document.querySelectorAll("#output code")].map((c) => c.textContent)`)).includes("greet"), "the service's name is code");
 });
 
 test("the `playground` service runs even when another service is declared before it", { skip }, async () => {

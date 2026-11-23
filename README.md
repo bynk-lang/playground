@@ -20,14 +20,14 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 
 | Path | What |
 |---|---|
-| `src/app.ts` | The app: editor (CodeMirror 6, with Reset to original for an edited example or shared snippet), compile, diagnostics, run, the compiled JS (a tab, or a column beside the editor on a screen 1200px or wider), deep-link, Share, examples picker, Learn links (the Book, install, source), and the "What runs here" note (the entry handler, the 3 s limit, which capabilities work in the browser), which each limit message links to. Format (the compiler's `bynk_format`, the same house style as the CLI and language server; Shift+Alt+F). |
+| `src/app.ts` | The app: editor (CodeMirror 6, with Reset to original for an edited example or shared snippet), compile, diagnostics, run, the compiled JS (a tab, or a column beside the editor on a screen 1200px or wider), deep-link, Share, examples picker, Learn links (the Book, install, source), and the "What runs here" note (the entry handler, the 3 s limit, which capabilities work in the browser), which each limit message links to. Format (the compiler's `bynk_format`, the same house style as the CLI and language server; Shift+Alt+F). Keyboard and display (Learn menu): the shortcuts, including the editor's list of problems (Ctrl/Cmd+Shift+M) and F8 to the next, and the choice to draw arrows as ligatures. On a phone, a Code / Result switch shows one pane at a time. |
 | `src/examples.ts` | The examples gallery — curated, **runnable** in-process snippets; the header picker loads them. Listed in reading order under `GROUPS` ("Start here" first), each linked to the tour step that teaches the same idea (`tour`), and back. `test/examples.test.mjs` compiles and runs every one. |
 | `test/e2e/` | Browser tests with no extra dependencies: build for two localhost ports, serve with a fake share service, drive headless Chrome over DevTools. Covers the run round trip, tabs, gallery, tour, share and fork, restore and Recent, theme and phone layout. `workers.test.mjs` runs the real app and sandbox Workers under `npx wrangler dev` at the pinned version (built from the repo's `wrangler.*.jsonc`, with only the share service faked) and checks the sandbox redirect, the `SHARE` binding and the `SHARE_LIMIT` rate limit in a browser. |
 | `worker/app.mjs` | The app Worker: sends `/api/*` to the share service over the `SHARE` binding (503 when unbound), refuses the sandbox's files (`/sandbox`, `sandbox.js`: untrusted code never runs on the app origin), serves everything else from the assets. |
 | `worker/sandbox.mjs` | The sandbox Worker: serves only the execution document (`sandbox.html`, `sandbox.js`) and redirects every other request, `/` included, to the app origin. |
 | `test/style.test.mjs` | Every example and tour source is in the house style (`bynk_format` returns each unchanged), so Format on one changes nothing. The sources are indented with tabs, as `bynk fmt` writes them; the editor shows a tab as two columns (`TAB_SIZE` in `src/app.ts`). |
 | `src/gallery.ts` | The searchable examples dialog (cards with a blurb and code peek). |
-| `fonts/` | The editor's code font: JetBrainsMono Nerd Font, trimmed woff2 with its ligatures (`calt`) kept, under the SIL OFL. See `fonts/README.md`. |
+| `fonts/` | The editor's code font: JetBrainsMono Nerd Font, trimmed woff2 with its ligatures (`calt`) kept, under the SIL OFL. The page draws them only when chosen in Keyboard and display, so by default `->` shows as typed. See `fonts/README.md`. |
 | `src/store.ts` | Per-browser memory: the autosaved draft, the last 10 snippets you ran and the tour steps you have passed (localStorage, every access guarded). `test/store.test.mjs` covers the recent-list logic. |
 | `src/tour.ts` | The guided tour: nine small programs to fix, each with a `check`, then a "What next" card (examples, the Book's next tutorial, install). `test/tour.test.mjs` proves every starter fails its check and every solution passes. |
 | `src/entry.ts` | Which emitted module the sandbox runs: `compose.js` for a program with capabilities, the context module's own `__makeSurface` for one with none (the compiler emits no `compose.js` then). |
@@ -205,8 +205,8 @@ The playground is built to need as little as possible from the people who use it
   address goes with it. The self-contained `#…` link stores nothing at all: the program
   travels in the link itself, and browsers do not send that part of a link to the server.
 - **What your browser keeps.** The playground keeps your current draft, your last 10
-  programs (**Recent**), your tour progress, your theme and whether you have dismissed
-  the first-run hint in your browser's local storage. It never leaves your device;
+  programs (**Recent**), your tour progress, your theme, whether code arrows are drawn as
+  ligatures, and whether you have dismissed the first-run hint in your browser's local storage. It never leaves your device;
   clearing your site data removes it. An embedded playground never reads or saves your
   draft, Recent or tour progress.
 - **No cookies, analytics or tracking.** The playground sets no cookies, runs no analytics,

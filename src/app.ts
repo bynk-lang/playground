@@ -13,7 +13,7 @@ import {
 } from "@codemirror/view";
 import type { Tooltip } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, isolateHistory } from "@codemirror/commands";
-import { linter, lintGutter, forceLinting } from "@codemirror/lint";
+import { linter, lintGutter, lintKeymap, forceLinting, forEachDiagnostic } from "@codemirror/lint";
 import type { Diagnostic as CmDiagnostic } from "@codemirror/lint";
 import { autocompletion } from "@codemirror/autocomplete";
 import type { CompletionContext, CompletionResult } from "@codemirror/autocomplete";
@@ -64,6 +64,39 @@ const WITHHELD = /is unavailable in the browser playground/;
 
 const $ = (id: string) => document.getElementById(id)!;
 
+// A symbol drawn beside words that already say what it means (▶ Run, Learn ▾, ↗ on a link
+// that opens a new tab): hidden from screen readers, which would otherwise read it out as
+// "black right-pointing triangle" and the like.
+function glyph(ch: string): HTMLSpanElement {
+  const span = document.createElement("span");
+  span.setAttribute("aria-hidden", "true");
+  span.textContent = ch;
+  return span;
+}
+
+// `text`, with a leading symbol (✕, ⇒, ✓, ▲) hidden from screen readers as above.
+function withGlyph(el: HTMLElement, text: string): HTMLElement {
+  const m = /^([✕⇒✓▲]) ([\s\S]*)$/.exec(text);
+  if (m) el.replaceChildren(glyph(m[1]), ` ${m[2]}`);
+  else el.textContent = text;
+  return el;
+}
+
+// Prose with `backticked` words as <code>, never treating the text as HTML. Compiler
+// messages and the tour use backticks for code; read aloud, they would be "grave accent".
+function proseNode(text: string): DocumentFragment {
+  const out = document.createDocumentFragment();
+  text.split("`").forEach((part, i) => {
+    if (i % 2 === 1) out.append(Object.assign(document.createElement("code"), { textContent: part }));
+    else if (part) out.append(part);
+  });
+  return out;
+}
+
+function renderProse(el: HTMLElement, text: string): void {
+  el.replaceChildren(proseNode(text));
+}
+
 let view: EditorView;
 // Highlighting starts on the synchronous stream highlighter and swaps to
 // web-tree-sitter once its wasm has loaded (slice 5b).
@@ -100,6 +133,8 @@ const bynkLinter = linter(
         to: byteToUtf16Offset(text, Math.max(d.to, d.from)),
         severity: d.severity === "error" ? ("error" as const) : ("warning" as const),
         message: d.message,
+        // Backticked words as code, so a screen reader doesn't read the backticks out.
+        renderMessage: () => proseNode(d.message),
       }))
       .filter((d) => d.from <= d.to);
   },
@@ -210,11 +245,28 @@ function source(): string {
   return view.state.doc.toString();
 }
 
+// Whether the status reports how the last run went ("ran", "2 errors"), which an edit
+// makes out of date.
+let statusFromRun = false;
+
 function setStatus(text: string, kind: "idle" | "busy" | "ok" | "error" = "idle"): void {
   const el = $("status");
   el.textContent = text;
   el.title = text;
   el.dataset.kind = kind;
+  statusFromRun = false;
+}
+
+// A run's outcome in the status, until the next edit.
+function setRunStatus(text: string, kind: "idle" | "ok" | "error" = "idle"): void {
+  setStatus(text, kind);
+  statusFromRun = true;
+}
+
+// After an edit the status would still say "ran" (or "1 error") about code that has
+// changed, beside the editor's own live count: say it has changed instead.
+function markEdited(): void {
+  if (statusFromRun) setStatus("edited since last run");
 }
 
 function renderDiagnostics(diags: Diagnostic[]): void {
@@ -236,7 +288,12 @@ function renderDiagnostics(diags: Diagnostic[]): void {
     jump.className = "diag-jump";
     const loc = d.line ? `${d.line}:${d.col}` : "—";
     jump.addEventListener("click", () => jumpTo(d));
-    jump.innerHTML = `<span class="diag-sev">${d.severity === "error" ? "✕ error" : "▲ warning"}</span> <span class="diag-loc">${loc}</span> ${escapeHtml(d.message)}`;
+    const sev = document.createElement("span");
+    sev.className = "diag-sev";
+    sev.append(glyph(d.severity === "error" ? "✕" : "▲"), d.severity === "error" ? " error" : " warning");
+    const at = Object.assign(document.createElement("span"), { className: "diag-loc", textContent: loc });
+    if (d.line) at.setAttribute("aria-label", `line ${d.line}, column ${d.col}`);
+    jump.append(sev, " ", at, " ", proseNode(d.message));
     row.appendChild(jump);
     // `category` is a fixed compiler constant today; escape it too (textContent) so this
     // stays injection-proof if a future diagnostic ever derives a category from source.
@@ -248,7 +305,7 @@ function renderDiagnostics(diags: Diagnostic[]): void {
       a.target = "_blank";
       a.rel = "noopener";
       a.title = "What this diagnostic means, in the Bynk Book";
-      a.textContent = `${d.category} ↗`;
+      a.append(`${d.category} `, glyph("↗"));
       cat = a;
     } else {
       cat = document.createElement("span");
@@ -261,15 +318,11 @@ function renderDiagnostics(diags: Diagnostic[]): void {
       const p = document.createElement("p");
       p.className = "diag-hint";
       // Backticks in a hint mark code.
-      p.innerHTML = `Try: ${escapeHtml(hint).replace(/`([^`]+)`/g, "<code>$1</code>")}`;
+      p.append("Try: ", proseNode(hint));
       row.appendChild(p);
     }
     panel.appendChild(row);
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] as string);
 }
 
 type Tab = "result" | "logs" | "js";
@@ -285,9 +338,24 @@ const jsOpen = { wiring: false, support: false };
 
 function jumpTo(d: Diagnostic): void {
   const text = source();
-  const pos = Math.min(byteToUtf16Offset(text, d.from), view.state.doc.length);
+  jumpToPos(Math.min(byteToUtf16Offset(text, d.from), view.state.doc.length));
+}
+
+function jumpToPos(pos: number): void {
+  showView("code");
   view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
   view.focus();
+}
+
+// The editor's first problem, as the linter last found it (errors before warnings).
+function firstProblem(): number | null {
+  let error: number | null = null;
+  let other: number | null = null;
+  forEachDiagnostic(view.state, (d, from) => {
+    if (d.severity === "error") error ??= from;
+    else other ??= from;
+  });
+  return error ?? other;
 }
 
 // Format: the compiler's own formatter (`bynk_format`), so the editor, the CLI and the
@@ -345,20 +413,25 @@ function formatSource(): void {
   setStatus("formatted", "ok");
 }
 
+// The editor's problem count, live as you type. While there is a problem it is a button
+// to the first one, so the problems can be reached without the mouse (the gutter marks
+// show theirs only on hover).
 function setDiagSummary(diags: Diagnostic[]): void {
-  const el = $("diag-summary");
+  const el = $("diag-summary") as HTMLButtonElement;
   const errors = diags.filter((d) => d.severity === "error").length;
   const warnings = diags.length - errors;
   if (errors > 0) {
-    el.textContent = `✕ ${errors} error${errors === 1 ? "" : "s"}`;
+    withGlyph(el, `✕ ${errors} error${errors === 1 ? "" : "s"}`);
     el.dataset.kind = "error";
   } else if (warnings > 0) {
-    el.textContent = `▲ ${warnings} warning${warnings === 1 ? "" : "s"}`;
+    withGlyph(el, `▲ ${warnings} warning${warnings === 1 ? "" : "s"}`);
     el.dataset.kind = "warning";
   } else {
-    el.textContent = "✓ No errors";
+    withGlyph(el, "✓ No errors");
     el.dataset.kind = "ok";
   }
+  el.disabled = diags.length === 0;
+  el.title = diags.length === 0 ? "" : `Go to the first problem (${IS_APPLE ? "⌘⇧M" : "Ctrl+Shift+M"} lists them all, F8 goes to the next)`;
 }
 
 function selectTab(tab: Tab): void {
@@ -459,16 +532,23 @@ function renderOutput(): void {
   const add = (cls: string, text: string) => {
     const line = document.createElement("div");
     line.className = cls;
-    line.textContent = text;
+    withGlyph(line, text);
     out.appendChild(line);
     return line;
   };
-  // A limit message ends with a way to read why the limit is there (#81).
-  const whyNote = (text: string) => add("out-note", `${text} `).appendChild(aboutButton("Why?"));
+  // A limit message ends with a way to read why the limit is there (#81). Its backticked
+  // words are code.
+  const whyNote = (text: string) => {
+    const line = add("out-note", "");
+    line.append(proseNode(text), " ", aboutButton("Why?"));
+  };
   const logs = lastReply?.logs ?? [];
   const badge = $("logs-badge");
   badge.hidden = logs.length === 0;
   badge.textContent = String(logs.length);
+  // The badge is read as "Logs 1"; the tab's name says "Logs, 1 line" instead.
+  badge.setAttribute("aria-hidden", "true");
+  $("logs-count").textContent = logs.length === 0 ? "" : `, ${logs.length} line${logs.length === 1 ? "" : "s"}`;
 
   renderJsPane();
   if (activeTab === "js") {
@@ -477,7 +557,7 @@ function renderOutput(): void {
     beside.type = "button";
     beside.id = "js-beside";
     beside.className = "link";
-    beside.textContent = "Show beside the editor ⇥";
+    beside.append("Show beside the editor ", glyph("⇥"));
     beside.title = "Read the JavaScript next to the Bynk, with the result still in view";
     beside.addEventListener("click", () => setJsBeside(true));
     out.appendChild(beside);
@@ -511,7 +591,7 @@ function renderOutput(): void {
   }
   // Result tab.
   if (reply.argError) {
-    add("out-error", `✕ Can't call the handler: ${reply.argError}.`);
+    add("out-error", "").append(glyph("✕"), " Can't call the handler: ", proseNode(reply.argError), ".");
     whyNote("Change the value under Arguments, then run again.");
     return;
   }
@@ -641,6 +721,12 @@ function argsParam(): string | null {
 // automatic first run, an example or a tour starter).
 async function compileAndRun(remember = false): Promise<TourOutcome> {
   const id = ++runSeq;
+  if (remember) {
+    // Asked for, however (the button, Ctrl/Cmd+Enter, Enter in an argument): on a phone the
+    // result is what Run is for, so show it; and the restored note has said its piece.
+    if (NARROW.matches) showView("result");
+    hideRestoredNote();
+  }
   renderArgs();
   setStatus("compiling…", "busy");
   lastReply = undefined;
@@ -666,7 +752,7 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
     lastNote = `Fix the ${n} error${n === 1 ? "" : "s"} above, then run again.`;
     renderOutput();
     selectTab("result");
-    setStatus(`${n} error${n === 1 ? "" : "s"}`, "error");
+    setRunStatus(`${n} error${n === 1 ? "" : "s"}`, "error");
     return { compiled: false };
   }
   if (!sandboxReady) {
@@ -689,14 +775,14 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
   if (argError && !remember && fillable) {
     lastNote = "Fill in the arguments above, then press Run.";
     renderOutput();
-    setStatus("needs arguments");
+    setRunStatus("needs arguments");
     return { compiled: true, error: argError };
   }
   if (argError) {
     lastReply = { kind: "bynk-result", id, logs: [], argError };
     renderOutput();
     selectTab("result");
-    setStatus("check arguments", "error");
+    setRunStatus("check arguments", "error");
     return { compiled: true, error: argError };
   }
   if (remember && !EMBED) rememberRun(source());
@@ -711,7 +797,7 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
   renderOutput();
   dismissCoach();
   const failed = reply.error || reply.timedOut || reply.argError;
-  setStatus(reply.argError ? "check arguments" : failed ? "run failed" : "ran", failed ? "error" : "ok");
+  setRunStatus(reply.argError ? "check arguments" : failed ? "run failed" : "ran", failed ? "error" : "ok");
   return {
     compiled: true,
     value: reply.value,
@@ -789,7 +875,7 @@ function mountLearn(): void {
   if (BYNK_VERSION) {
     const link = $("bynk-version") as HTMLAnchorElement;
     link.href = `https://github.com/bynk-lang/bynk/releases/tag/${BYNK_VERSION}`;
-    link.append("Bynk ", Object.assign(document.createElement("code"), { textContent: BYNK_VERSION }), " release notes ↗");
+    link.append("Bynk ", Object.assign(document.createElement("code"), { textContent: BYNK_VERSION }), " release notes ", glyph("↗"));
     link.hidden = false;
   }
   const setOpen = (open: boolean): void => {
@@ -920,16 +1006,61 @@ function mountReference(): void {
   search.addEventListener("input", render);
 }
 
+// The theme button is a toggle, "Dark theme", pressed while the theme is dark: its icon
+// alone shows the theme it switches to, which a screen reader can't see.
 function mountTheme(): void {
-  $("theme").addEventListener("click", () => {
+  const button = $("theme");
+  const sync = () => button.setAttribute("aria-pressed", String(document.documentElement.dataset.theme !== "light"));
+  sync();
+  button.addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
     document.documentElement.dataset.theme = next;
+    sync();
     try {
       localStorage.setItem("bynk-theme", next);
     } catch {
       // not persisted
     }
   });
+}
+
+// Keyboard and display: the shortcuts (otherwise only in tooltips, which keyboard and touch
+// users never see), and whether the code font draws arrows as ligatures.
+function mountKeys(): void {
+  if (IS_APPLE) {
+    for (const k of document.querySelectorAll("#keys kbd[data-mod]")) k.textContent = "⌘";
+    for (const k of document.querySelectorAll("#keys kbd[data-alt]")) k.textContent = "⌥";
+  }
+  const box = $("ligatures") as HTMLInputElement;
+  box.checked = document.documentElement.dataset.ligatures === "on";
+  box.addEventListener("change", () => {
+    if (box.checked) document.documentElement.dataset.ligatures = "on";
+    else delete document.documentElement.dataset.ligatures;
+    try {
+      localStorage.setItem("bynk-ligatures", box.checked ? "on" : "off");
+    } catch {
+      // not kept: the choice lasts this visit
+    }
+  });
+  mountSheet($("keys") as HTMLDialogElement, "[data-keys]");
+}
+
+// --- Phone: Code or Result -------------------------------------------------------
+// On a narrow screen one pane shows at a time (the CSS), so the editor has the height of
+// the screen. Run shows the result; a problem's location button shows the code.
+const NARROW = matchMedia("(max-width: 800px)");
+
+function showView(which: "code" | "result"): void {
+  document.querySelector("main")!.dataset.view = which;
+  for (const b of document.querySelectorAll<HTMLElement>("#view-switch button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.view === which));
+  }
+}
+
+function mountViewSwitch(): void {
+  for (const b of document.querySelectorAll<HTMLElement>("#view-switch button")) {
+    b.addEventListener("click", () => showView(b.dataset.view as "code" | "result"));
+  }
 }
 
 // --- Share sheet -----------------------------------------------------------------
@@ -1067,6 +1198,11 @@ function scheduleDraftSave(): void {
   }, 400);
 }
 
+// It has said its piece once the visitor carries on: the first edit or run puts it away.
+function hideRestoredNote(): void {
+  $("restored-note").hidden = true;
+}
+
 function mountRestoredNote(): void {
   const note = $("restored-note");
   if (restoredDraft) note.hidden = false;
@@ -1175,14 +1311,15 @@ function keepOutgoing(): void {
 }
 
 // `own`: `src` is the user's work (a restored draft), not something the app supplied.
-function setEditorContent(src: string, own = false): void {
+// `focus`: put the cursor in the editor (not when a tour step opens: see showTourStep).
+function setEditorContent(src: string, own = false, focus = true): void {
   keepOutgoing();
   // An undo step of its own, never merged with typing just before or after it, so one
   // Undo after a replacement (a reset, #88) brings back exactly what was there.
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: src }, annotations: isolateHistory.of("full") });
   pristine = own ? null : src;
   updateReset();
-  view.focus();
+  if (focus) view.focus();
 }
 
 // Reset to original (#88): shown while the editor holds an edited copy of what the app
@@ -1238,10 +1375,26 @@ let tourIndex = -1;
 let tourDone = false;
 
 // The Tour button says how far along the learner is.
+function tourStepsDone(): number {
+  return loadTourDone().filter((id) => TOUR.some((s) => s.id === id)).length;
+}
+
 function updateTourButton(): void {
-  const done = loadTourDone().filter((id) => TOUR.some((s) => s.id === id)).length;
-  $("tour-btn").textContent = done === 0 ? "Tour" : done === TOUR.length ? "Tour ✓" : `Tour · ${done}/${TOUR.length}`;
+  const done = tourStepsDone();
+  const button = $("tour-btn");
+  if (done === TOUR.length) button.replaceChildren("Tour ", glyph("✓"));
+  else button.textContent = done === 0 ? "Tour" : `Tour · ${done}/${TOUR.length}`;
+  // "Tour · 3/9" and the tick, in words.
+  if (done === 0) button.removeAttribute("aria-label");
+  else button.setAttribute("aria-label", done === TOUR.length ? "Tour, finished" : `Tour, ${done} of ${TOUR.length} steps done`);
   $("tour-restart").hidden = done === 0;
+}
+
+// The end-of-tour card (#78), in the tour card's place, with focus on its heading.
+function showTourEnd(): void {
+  $("tour").hidden = true;
+  $("tour-end").hidden = false;
+  $("tour-end-title").focus();
 }
 
 function tourStep(): TourStep | undefined {
@@ -1252,20 +1405,6 @@ function setTourFeedback(text: string, kind: "ok" | "miss" | "idle" = "idle"): v
   const el = $("tour-feedback");
   renderProse(el, text);
   el.dataset.kind = kind;
-}
-
-// Render `backticked` words as <code> without ever treating the prose as HTML.
-function renderProse(el: HTMLElement, text: string): void {
-  el.textContent = "";
-  text.split("`").forEach((part, i) => {
-    if (i % 2 === 1) {
-      const code = document.createElement("code");
-      code.textContent = part;
-      el.append(code);
-    } else {
-      el.append(part);
-    }
-  });
 }
 
 // `fresh` is false when the page opened on this step: the editor already holds the
@@ -1295,7 +1434,7 @@ function showTourStep(i: number, fresh = true): void {
   renderProse($("tour-task"), step.task);
   const example = EXAMPLES.find((e) => e.tour === step.id);
   $("tour-example-row").hidden = !example;
-  if (example) $("tour-example").textContent = `See a full example: ${example.title} ›`;
+  if (example) $("tour-example").replaceChildren(`See a full example: ${example.title} `, glyph("›"));
   setTourFeedback(doneBefore ? "✓ You passed this step earlier." : "", doneBefore ? "ok" : "idle");
   tourDone = doneBefore;
   ($("tour-next") as HTMLButtonElement).disabled = !doneBefore;
@@ -1303,7 +1442,10 @@ function showTourStep(i: number, fresh = true): void {
   $("tour-next").textContent = i === TOUR.length - 1 ? "Finish" : "Next";
   window.history.replaceState(null, "", `${location.pathname}?tour=${encodeURIComponent(step.id)}`);
   if (!fresh) return;
-  setEditorContent(step.starter);
+  setEditorContent(step.starter, false, false);
+  // To the step's heading, so a screen reader reads the instructions before the code
+  // (and focus isn't lost when Next, which had it, is disabled for the new step).
+  $("tour-title").focus();
   void compileAndRun();
 }
 
@@ -1356,17 +1498,20 @@ function nextTour(): void {
     setStatus("tour complete", "ok");
     window.history.replaceState(null, "", location.pathname);
     // Where to go next, in the tour card's place; focus follows, as Finish has gone.
-    $("tour-end").hidden = false;
-    $("tour-end-title").focus();
+    showTourEnd();
     return;
   }
   showTourStep(tourIndex + 1);
 }
 
 function mountTour(): void {
-  $("tour-btn").addEventListener("click", () =>
-    tourIndex >= 0 ? exitTour(true) : showTourStep(nextIncomplete(TOUR.map((s) => s.id), loadTourDone())),
-  );
+  // A finished tour opens on its end card, which offers to start over, rather than at step 1.
+  $("tour-btn").addEventListener("click", () => {
+    if (tourIndex >= 0) exitTour(true);
+    else if (!$("tour-end").hidden) $("tour-end").hidden = true;
+    else if (tourStepsDone() === TOUR.length) showTourEnd();
+    else showTourStep(nextIncomplete(TOUR.map((s) => s.id), loadTourDone()));
+  });
   const restart = (): void => {
     resetTourDone();
     showTourStep(0);
@@ -1413,9 +1558,13 @@ function makeEditor(doc: string): void {
         indentUnit.of("\t"),
         highlightActiveLine(),
         history(),
+        // Without a name a screen reader says only "edit text, multi-line".
+        EditorView.contentAttributes.of({ "aria-label": "main.bynk, Bynk source" }),
         keymap.of([
           { key: "Mod-Enter", run: () => (void compileAndRun(true), true) },
           { key: "Shift-Alt-f", run: () => (formatSource(), true) },
+          // Ctrl/Cmd+Shift+M lists the problems, F8 goes to the next.
+          ...lintKeymap,
           ...defaultKeymap,
           ...historyKeymap,
         ]),
@@ -1424,6 +1573,8 @@ function makeEditor(doc: string): void {
             scheduleDraftSave();
             scheduleArgs();
             if (pristine !== null) updateReset();
+            markEdited();
+            if (u.transactions.some((t) => t.isUserEvent("input") || t.isUserEvent("delete"))) hideRestoredNote();
           }
         }),
         highlightCompartment.of(bynkHighlighting()),
@@ -1561,6 +1712,10 @@ async function main(): Promise<void> {
   $("format").title = `Format to the house style (${IS_APPLE ? "⌥⇧F" : "Shift+Alt+F"})`;
   $("format").addEventListener("click", formatSource);
   $("run").addEventListener("click", () => void compileAndRun(true));
+  $("diag-summary").addEventListener("click", () => {
+    const pos = firstProblem();
+    if (pos !== null) jumpToPos(pos);
+  });
   $("share").addEventListener("click", () => void share());
   $("coach-dismiss").addEventListener("click", dismissCoach);
   const tabs = [...document.querySelectorAll<HTMLElement>("[role=tab]")];
@@ -1594,6 +1749,8 @@ async function main(): Promise<void> {
     }
   });
   mountTheme();
+  mountKeys();
+  mountViewSwitch();
   mountMenu();
   mountLearn();
   mountAbout();
