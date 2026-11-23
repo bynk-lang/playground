@@ -48,8 +48,16 @@ const TAB_SIZE = 2;
 // `?embed=1`: the compact view for an <iframe> in someone else's page (see the share
 // sheet). It runs the snippet but never reads or writes this browser's draft, recents,
 // tour progress or coachmark: a visitor's embed must not disturb their own playground.
-const EMBED = new URLSearchParams(location.search).get("embed") === "1";
-if (EMBED) document.documentElement.dataset.embed = "1";
+//
+// `?embed=inline`: the same, for a Bynk page that frames the editor inside its own
+// content (the "Edit & run in-page" button on bynk-lang.org). The host already carries
+// the brand and its own "Open in playground" link, so the wordmark and that link go too,
+// leaving just the editor, Run and the results. `&theme=light|dark` matches the host's
+// theme (index.html applies it before first paint, without saving it).
+const EMBED_MODE = new URLSearchParams(location.search).get("embed");
+const EMBED = EMBED_MODE === "1" || EMBED_MODE === "inline";
+const INLINE = EMBED_MODE === "inline";
+if (EMBED) document.documentElement.dataset.embed = INLINE ? "inline" : "1";
 
 const RUN_TIMEOUT_MS = 3000;
 
@@ -1697,10 +1705,12 @@ async function main(): Promise<void> {
   mountSharedNote();
   mountRestoredNote();
   mountLinkNote();
-  if (EMBED) {
-    // "Open in playground": the same snippet in the full page, in a new tab.
+  if (EMBED && !INLINE) {
+    // "Open in playground": the same snippet in the full page, in a new tab. An inline
+    // embed's host page has its own.
     const u = new URL(location.href);
     u.searchParams.delete("embed");
+    u.searchParams.delete("theme");
     const link = $("open-full") as HTMLAnchorElement;
     link.href = u.toString();
     link.hidden = false;

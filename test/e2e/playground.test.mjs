@@ -858,6 +858,18 @@ test("embed: the share sheet's code loads the same snippet in the compact view",
   assert.ok(full.includes("?s=t") && !full.includes("embed"), "Open in playground drops embed");
 });
 
+test("inline embed: no wordmark or Open in playground, and the host's theme", { skip }, async () => {
+  await fresh("?embed=inline&theme=light");
+  assert.equal(await page.eval(`document.documentElement.dataset.embed`), "inline");
+  assert.equal(await page.eval(`document.documentElement.dataset.theme`), "light");
+  for (const hidden of [".wordmark", "#open-full", "#share", "#examples", "#theme", "#shared-note"]) {
+    assert.equal(await page.visible(hidden), false, `${hidden} is hidden in the inline embed`);
+  }
+  assert.equal(await page.visible("#run"), true);
+  assert.match(await page.text("#output"), /Hello from Bynk!/);
+  assert.equal(await page.eval(`localStorage.getItem("bynk-theme")`), null, "the host's theme is not saved");
+});
+
 test("embed: never touches the visitor's own draft or recents", { skip }, async () => {
   await fresh("?embed=1");
   await page.type(SCRATCH);
