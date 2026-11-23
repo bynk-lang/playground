@@ -34,6 +34,8 @@
           t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
         }
         document.documentElement.dataset.theme = t;
+        // Arrows drawn as ligatures: off unless chosen (Keyboard and display).
+        try { if (localStorage.getItem("bynk-ligatures") === "on") document.documentElement.dataset.ligatures = "on"; } catch (e) {}
       })();
     </script>
     <style>
@@ -91,6 +93,9 @@
       }
 
       * { box-sizing: border-box; }
+      /* Read by screen readers, not drawn. */
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+        clip-path: inset(50%); white-space: nowrap; border: 0; }
       html, body { margin: 0; height: 100%; background: var(--surface-ground); color: var(--ink);
         font: 400 0.875rem/1.375rem var(--font-sans); }
       /* After the shorthand above, which would otherwise set the root size. */
@@ -133,17 +138,17 @@
       [data-theme="light"] #theme .icon-sun, [data-theme="dark"] #theme .icon-moon { display: none; }
       .theme-label { display: none; }
 
-      /* Toolbar layout. #menu draws nothing on a wide screen (display: contents), so its
-         buttons sit in the header's row; `order` keeps them where they always were:
-         Examples, Tour, Run, Share, then status and Theme at the right. */
-      #menu { display: contents; }
-      .wordmark { order: 0; } #examples { order: 1; } #tour-btn { order: 2; } #run { order: 3; } #format { order: 4; } #share { order: 5; }
-      #open-full { order: 6; } .spacer { order: 7; } #status { order: 8; } #theme { order: 9; }
+      /* Toolbar layout. The buttons are in the source in the order they are drawn, so the
+         keyboard meets them in that order too (WCAG 2.4.3): Examples, Tour, Learn, Run, Format,
+         Share, then the status and Theme at the right. On a narrow screen a script under the
+         header moves Examples, Tour, Format, Theme and Learn into #menu, the menu button's
+         dropdown; on a wide one #menu is empty and draws nothing. */
+      #menu { display: none; }
       /* Buttons keep their width and one line; the status and spacer give way instead. */
       header button { flex: none; white-space: nowrap; }
-      .burger { display: none; order: 10; padding: 0.375rem 0.625rem; line-height: 0; }
-      /* Learn: after Tour (same order, later in the source); its links drop down under it. */
-      #learn { order: 2; position: relative; }
+      .burger { display: none; padding: 0.375rem 0.625rem; line-height: 0; }
+      /* Learn: its links drop down under it. */
+      #learn { position: relative; }
       #learn-links { display: none; position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 6; flex-direction: column;
         min-width: 15rem; padding: 0.375rem; background: var(--surface-raised); border: 1px solid var(--line-strong);
         border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
@@ -166,6 +171,11 @@
       #coach button { min-height: 1.75rem; padding: 0.125rem 0.625rem; font-weight: 400; }
 
       /* Panes */
+      #view-switch { display: none; gap: 0.25rem; padding: 0.25rem; background: var(--surface-panel);
+        border: 1px solid var(--line); border-radius: var(--radius-lg); }
+      #view-switch button { flex: 1; min-height: 2.25rem; border: 0; background: none; color: var(--ink-muted); }
+      #view-switch button[aria-pressed="true"] { background: var(--surface-raised); color: var(--ink);
+        box-shadow: inset 0 0 0 1px var(--line-strong); }
       main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; min-height: 0; }
       /* The compiled JS beside the editor (#87): a third column on a screen wide enough
          for one; the tab, and the button that moves it out, only below that. */
@@ -186,13 +196,12 @@
       .pane-head { display: flex; gap: 1rem; align-items: center; padding: 0 0.75rem; min-height: 2.5rem;
         border-bottom: 1px solid var(--line); font: 600 0.75rem/1rem var(--font-sans); letter-spacing: 0.06em;
         text-transform: uppercase; color: var(--ink-muted); }
+      .pane-title { margin: 0; font: inherit; letter-spacing: inherit; }
       #editor { min-height: 0; overflow: hidden; }
       .cm-editor { height: 100%; background: var(--surface-panel); color: var(--ink);
         font: 400 0.8125rem/1.375rem var(--font-mono); }
-      /* CodeMirror sets its own `monospace` on the scroller, so name our font there too,
-         and keep contextual ligatures on. */
-      .cm-scroller { font-family: var(--font-mono) !important; font-variant-ligatures: contextual;
-        font-feature-settings: "calt" 1, "liga" 1; }
+      /* CodeMirror sets its own `monospace` on the scroller, so name our font there too. */
+      .cm-scroller { font-family: var(--font-mono) !important; }
       .cm-editor.cm-focused { outline: 2px solid var(--accent) !important; outline-offset: -2px; }
       ::placeholder { color: var(--ink-muted); opacity: 1; }
       .cm-gutters { background: var(--surface-panel) !important; color: var(--ink-muted) !important; border: 0 !important; }
@@ -208,9 +217,20 @@
         border: 1px solid var(--line-strong) !important; border-radius: var(--radius-md); box-shadow: var(--shadow-pop); }
       .cm-tooltip-bynk-hover { padding: 0.25rem 0.5rem; font: 400 0.75rem/1.125rem var(--font-mono); }
       .cm-tooltip-autocomplete ul li[aria-selected] { background: var(--line) !important; color: var(--ink) !important; }
+      .cm-panels { background: var(--surface-raised) !important; color: var(--ink) !important; }
+      .cm-panels-bottom { border-top: 1px solid var(--line-strong) !important; }
+      .cm-panel.cm-panel-lint ul [aria-selected] { background: var(--line) !important; color: var(--ink) !important; }
+      .cm-panel.cm-panel-lint ul:focus [aria-selected] { background: color-mix(in srgb, var(--accent) 28%, transparent) !important; }
+      .cm-panel.cm-panel-lint button[name="close"] { min-height: 0; padding: 0 0.375rem; color: var(--ink); }
+      .cm-diagnostic code, .diag-jump code { font: inherit; color: var(--ink); background: var(--surface-panel);
+        padding: 0 0.1875rem; border-radius: 0.1875rem; }
       #reset { min-height: 0; padding: 0; font-size: 0.8125rem; text-transform: none; letter-spacing: 0; }
       #reset[hidden] { display: none; }
-      #diag-summary { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; }
+      /* The error count is a button to the first problem (#diag-summary), drawn as text. */
+      #diag-summary { margin-left: auto; min-height: 0; padding: 0.125rem 0.25rem; background: none; border: 0;
+        font: 600 0.75rem/1rem var(--font-sans); text-transform: none; letter-spacing: 0; color: var(--ink-muted);
+        text-decoration: underline; text-underline-offset: 0.1875rem; }
+      #diag-summary:disabled { opacity: 1; cursor: default; text-decoration: none; }
       #diag-summary[data-kind="error"] { color: var(--danger); }
       #diag-summary[data-kind="warning"] { color: var(--brand-text); }
       #diag-summary[data-kind="ok"] { color: var(--accent); }
@@ -304,6 +324,13 @@
       dialog#gallery { width: min(47.5rem, calc(100vw - 1.5rem)); }
       dialog#share-sheet { width: min(28.75rem, calc(100vw - 1.5rem)); }
       dialog#about-runs { width: min(40rem, calc(100vw - 1.5rem)); }
+      dialog#keys { width: min(32rem, calc(100vw - 1.5rem)); }
+      .keys-list { display: grid; grid-template-columns: auto 1fr; gap: 0.375rem 1rem; margin: 0 0 0.75rem; }
+      .keys-list dt { white-space: nowrap; }
+      .keys-list dd { margin: 0; }
+      .keys-list kbd { margin: 0; opacity: 1; font-size: 0.8125rem; padding: 0 0.25rem; border: 1px solid var(--line-strong);
+        border-radius: 0.25rem; background: var(--surface-panel); }
+      .setting { display: flex; gap: 0.5rem; align-items: baseline; }
       dialog#reference { width: min(44rem, calc(100vw - 1.5rem)); height: min(40rem, calc(100vh - 3rem)); }
       #reference-search { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; min-height: 2.5rem; font: 400 0.875rem var(--font-sans);
         background: var(--surface-panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
@@ -366,8 +393,9 @@
       .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(16.25rem, 1fr)); gap: 0.75rem; }
       .recent-title { margin: 1.25rem 0 0.5rem; font: 600 0.75rem/1rem var(--font-sans); letter-spacing: 0.06em;
         text-transform: uppercase; color: var(--ink-muted); }
-      #restored-note { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-raised);
-        border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
+      /* A small line, not a bar: it goes away by itself at the first edit or run. */
+      #restored-note { display: flex; align-items: center; gap: 0.5rem; padding: 0 0.75rem; font-size: 0.8125rem; color: var(--ink-muted); }
+      #restored-note button { min-height: 1.75rem; padding: 0.125rem 0.375rem; font-size: 0.8125rem; }
       #restored-note[hidden] { display: none; }
       #restored-note span { flex: 1; }
       #app:has(#restored-note:not([hidden])) { grid-template-rows: auto auto 1fr; }
@@ -385,9 +413,11 @@
       .card[aria-current="true"] { border-color: var(--line-strong); }
       .card-title { font-weight: 650; }
       .card-blurb { color: var(--ink-muted); }
-      .card-peek { margin: 0.5rem 0 0; font: 400 0.75rem/1.125rem var(--font-mono); color: var(--ink); white-space: pre; overflow: hidden; }
+      .card-peek { margin: 0.5rem 0 0; font: 400 0.75rem/1.125rem var(--font-mono); color: var(--ink); white-space: pre; overflow: hidden;
+        tab-size: 2; mask-image: linear-gradient(to right, #000 80%, transparent); }
       .card-current { color: var(--accent); font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem; }
-      .gallery-group:first-child .recent-title { margin-top: 0.25rem; }
+      .gallery-group:first-child .recent-title, #recent-section > .recent-title { margin-top: 0.25rem; }
+      #recent-section { margin-bottom: 1.25rem; }
       .tour-example { margin: 0 0 0.5rem; font-size: 0.875rem; }
       .tour-example button.link { padding: 0; min-height: 0; font-size: inherit; }
       .card-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
@@ -402,19 +432,30 @@
           min-width: 12rem; padding: 0.375rem; background: var(--surface-raised); border: 1px solid var(--line-strong);
           border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
         header[data-menu-open] #menu { display: flex; }
-        #menu button { order: 0; width: 100%; text-align: left; border: 0; background: none; font-weight: 600; padding: 0.5rem 0.75rem; }
+        #menu button { width: 100%; text-align: left; border: 0; background: none; font-weight: 600; padding: 0.5rem 0.75rem; }
         #menu button:hover { background: var(--surface-panel); }
         /* In the menu the links are items of their own, under a small heading, not a dropdown,
-           after the menu's buttons (order 0). */
-        #learn { order: 1; border-top: 1px solid var(--line); margin-top: 0.25rem; padding-top: 0.25rem; }
+           after the menu's buttons. */
+        #learn { border-top: 1px solid var(--line); margin-top: 0.25rem; padding-top: 0.25rem; }
         #learn-btn { display: none; }
         #learn-links { display: flex; position: static; min-width: 0; padding: 0; border: 0; box-shadow: none; background: none; }
         .learn-label { display: block; font: 600 0.6875rem/1rem var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase;
           color: var(--ink-muted); padding: 0.375rem 0.75rem 0.125rem; }
         #theme { line-height: normal; }
         .theme-label { display: inline; }
-        main { grid-template-columns: 1fr; grid-template-rows: minmax(15rem, 1fr) auto; overflow: auto; }
-        #right { min-height: 20rem; }
+        /* Said as "on" or "off" on screen; a screen reader hears aria-pressed instead. */
+        #theme[aria-pressed="true"] .theme-label::after { content: ": on"; content: ": on" / ""; }
+        #theme[aria-pressed="false"] .theme-label::after { content: ": off"; content: ": off" / ""; }
+        /* One pane at a time, with a switch above (#view-switch): the editor gets the screen's
+           height, and Run shows the result. The tour card stays in view under either. */
+        main { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; overflow: auto; }
+        #editor-pane, #results-pane { min-height: 12rem; }
+        #view-switch { display: flex; }
+        main[data-view="code"] #results-pane { display: none; }
+        main[data-view="result"] { grid-template-rows: auto minmax(0, 1fr); }
+        main[data-view="result"] #editor-pane { display: none; }
+        #right { min-height: 0; }
+        main[data-view="code"] #right { grid-template-rows: auto; }
         /* One row: Run and Share stay, the status gives way (it truncates) and the menu
            button sits at the right. */
         header { flex-wrap: nowrap; min-width: 0; }
@@ -425,6 +466,14 @@
         button, select { min-height: 2.5rem; }
         kbd { display: none; }
       }
+
+      /* The code font draws ->, <- and => as single arrows. Off by default, so a newcomer sees
+         the characters they type; Keyboard and display turns them on (data-ligatures). Last,
+         and specific, because every `font:` shorthand above resets the ligatures. */
+      :root:not([data-ligatures="on"]) :is(code, kbd, pre, textarea, .cm-scroller, .out-code, .diag, #output, #js-pane-body, .card-peek) {
+        font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
+      :root[data-ligatures="on"] :is(code, kbd, pre, textarea, .cm-scroller, .out-code, .diag, #output, #js-pane-body, .card-peek) {
+        font-variant-ligatures: contextual; font-feature-settings: "calt" 1, "liga" 1; }
     </style>
   </head>
   <body>
@@ -439,49 +488,72 @@
           </svg>
           <span class="word">Bynk<span class="dot">.</span></span>
         </h1>
-        <!-- Examples, Tour and Theme: inline on a wide screen, folded into the menu button's
-             dropdown on a narrow one (the CSS below; the wrapper itself draws nothing). -->
-        <div id="menu">
-          <button id="examples" aria-haspopup="dialog" title="Browse examples">Examples</button>
-          <button id="tour-btn" title="A short guided tour of Bynk">Tour</button>
-          <!-- Where to go next: a dropdown on a wide screen, a group of links in the phone menu. -->
-          <div id="learn">
-            <button id="learn-btn" aria-expanded="false" aria-controls="learn-links" title="Docs, install and source">Learn ▾</button>
-            <div id="learn-links">
-              <span class="learn-label">Learn</span>
-              <button type="button" data-about aria-haspopup="dialog">What runs here</button>
-              <button type="button" data-reference aria-haspopup="dialog">Standard library</button>
-              <a href="https://bynk-lang.org/book/" target="_blank" rel="noopener">The Bynk Book ↗</a>
-              <a href="https://bynk-lang.org/book/tutorials/01-first-program/" target="_blank" rel="noopener">Your first program ↗</a>
-              <a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a>
-              <a href="https://github.com/bynk-lang/bynk" target="_blank" rel="noopener">Bynk on GitHub ↗</a>
-              <a href="https://github.com/bynk-lang/playground" target="_blank" rel="noopener">Playground source &amp; issues ↗</a>
-              <!-- The compiler release this build runs (#79), filled in by the app. -->
-              <a id="bynk-version" target="_blank" rel="noopener" hidden></a>
-            </div>
+        <!-- In the order they are drawn, so Tab meets them in that order. On a narrow screen the
+             script after the header moves Examples, Tour, Format, Theme and Learn into #menu. -->
+        <button id="examples" aria-haspopup="dialog" title="Browse examples">Examples</button>
+        <button id="tour-btn" title="A short guided tour of Bynk">Tour</button>
+        <!-- Where to go next: a dropdown on a wide screen, a group of links in the phone menu. -->
+        <div id="learn">
+          <button id="learn-btn" aria-expanded="false" aria-controls="learn-links" title="Docs, install and source">Learn <span aria-hidden="true">▾</span></button>
+          <div id="learn-links">
+            <span class="learn-label">Learn</span>
+            <button type="button" data-about aria-haspopup="dialog">What runs here</button>
+            <button type="button" data-reference aria-haspopup="dialog">Standard library</button>
+            <button type="button" data-keys aria-haspopup="dialog">Keyboard and display</button>
+            <a href="https://bynk-lang.org/book/" target="_blank" rel="noopener">The Bynk Book <span aria-hidden="true">↗</span></a>
+            <a href="https://bynk-lang.org/book/tutorials/01-first-program/" target="_blank" rel="noopener">Your first program <span aria-hidden="true">↗</span></a>
+            <a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk <span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/bynk-lang/bynk" target="_blank" rel="noopener">Bynk on GitHub <span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/bynk-lang/playground" target="_blank" rel="noopener">Playground source &amp; issues <span aria-hidden="true">↗</span></a>
+            <!-- The compiler release this build runs (#79), filled in by the app. -->
+            <a id="bynk-version" target="_blank" rel="noopener" hidden></a>
           </div>
-          <button id="format" disabled title="Format to the house style">Format</button>
-          <!-- An icon on a wide screen (the theme it switches to: the sun in dark, the moon in
-               light), with its word beside it in the phone menu. -->
-          <button id="theme" aria-label="Switch between dark and light theme" title="Switch theme">
-            <svg class="icon-sun" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="10" cy="10" r="3.5"/><path d="M10 1.75v2M10 16.25v2M1.75 10h2M16.25 10h2M4.17 4.17l1.41 1.41M14.42 14.42l1.41 1.41M4.17 15.83l1.41-1.41M14.42 5.58l1.41-1.41"/></g></svg>
-            <svg class="icon-moon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/></svg>
-            <span class="theme-label">Theme</span>
-          </button>
         </div>
-        <button id="run" class="primary" title="Compile &amp; run (⌘/Ctrl+Enter)">▶ Run<kbd id="run-key">Ctrl+Enter</kbd></button>
+        <!-- The shortcut hint is drawn for sighted users; aria-keyshortcuts says it to the rest. -->
+        <button id="run" class="primary" title="Compile &amp; run (⌘/Ctrl+Enter)" aria-keyshortcuts="Control+Enter Meta+Enter"><span aria-hidden="true">▶</span> Run<kbd id="run-key" aria-hidden="true">Ctrl+Enter</kbd></button>
+        <button id="format" disabled title="Format to the house style" aria-keyshortcuts="Shift+Alt+F">Format</button>
         <button id="share" title="Copy a link to this snippet">Share</button>
-        <a id="open-full" class="btn" target="_blank" rel="noopener" hidden>Open in playground ↗</a>
+        <a id="open-full" class="btn" target="_blank" rel="noopener" hidden>Open in playground <span aria-hidden="true">↗</span></a>
         <span class="spacer"></span>
         <span id="status" role="status" aria-live="polite" data-kind="busy">loading…</span>
+        <!-- An icon on a wide screen (the theme it switches to: the sun in dark, the moon in
+             light), with its word beside it in the phone menu. A toggle: pressed in dark. -->
+        <button id="theme" aria-label="Dark theme" aria-pressed="true" title="Switch theme">
+          <svg class="icon-sun" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="10" cy="10" r="3.5"/><path d="M10 1.75v2M10 16.25v2M1.75 10h2M16.25 10h2M4.17 4.17l1.41 1.41M14.42 14.42l1.41 1.41M4.17 15.83l1.41-1.41M14.42 5.58l1.41-1.41"/></g></svg>
+          <svg class="icon-moon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/></svg>
+          <span class="theme-label">Dark theme</span>
+        </button>
         <button id="menu-btn" class="burger" aria-label="Menu" aria-expanded="false" aria-controls="menu">
           <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
         </button>
+        <!-- The menu button's dropdown, after it, so Tab goes on from the button into it. -->
+        <div id="menu"></div>
         <div id="coach" hidden>
           <span>Press Run, or Ctrl/Cmd+Enter.</span>
           <button id="coach-dismiss">Got it</button>
         </div>
       </header>
+      <script>
+        // Narrow screen: Examples, Tour, Format, Theme and Learn go into the menu button's
+        // dropdown; wide: back to their places in the toolbar. Moving them, rather than
+        // reordering with CSS, keeps the keyboard order the same as the order on screen.
+        // Here, not in app.js, so the toolbar is in place before the first paint.
+        (function () {
+          var narrow = matchMedia("(max-width: 800px)");
+          var $ = function (id) { return document.getElementById(id); };
+          function place() {
+            if (narrow.matches) {
+              ["examples", "tour-btn", "format", "theme", "learn"].forEach(function (id) { $("menu").appendChild($(id)); });
+            } else {
+              $("run").before($("examples"), $("tour-btn"), $("learn"));
+              $("share").before($("format"));
+              $("menu-btn").before($("theme"));
+            }
+          }
+          place();
+          narrow.addEventListener("change", place);
+        })();
+      </script>
       <div id="shared-note" hidden>
         <span><strong>Shared snippet.</strong> Fork it to edit your own copy: the original link never changes.</span>
         <button id="fork">Fork</button>
@@ -491,25 +563,32 @@
         <span id="link-note-text"></span>
         <button id="link-dismiss" class="link">Dismiss</button>
       </div>
+      <!-- Goes away at the first edit or run. -->
       <div id="restored-note" hidden>
-        <span><strong>Restored your last snippet.</strong> It is kept in this browser only.</span>
+        <span>Restored your last snippet, kept in this browser only.</span>
         <button id="start-fresh">Start fresh</button>
         <button id="restored-dismiss" class="link">Dismiss</button>
       </div>
-      <main>
-        <section class="pane" aria-label="Editor">
+      <main data-view="code">
+        <!-- Phone only: one pane at a time. -->
+        <div id="view-switch" role="group" aria-label="Show">
+          <button type="button" data-view="code" aria-pressed="true">Code</button>
+          <button type="button" data-view="result" aria-pressed="false">Result</button>
+        </div>
+        <section id="editor-pane" class="pane" aria-label="Editor">
           <div class="pane-head">
-            <span>main.bynk</span>
+            <h2 class="pane-title">main.bynk</h2>
             <!-- Shown while an example, shared snippet or tour step has been edited (#88). -->
-            <button id="reset" class="link" title="Put back the code as it was loaded; your edits go to Recent, and Undo brings them back" hidden>↺ Reset to original</button>
-            <span id="diag-summary"></span>
+            <button id="reset" class="link" title="Put back the code as it was loaded; your edits go to Recent, and Undo brings them back" hidden><span aria-hidden="true">↺</span> Reset to original</button>
+            <!-- The problem count; a button to the first problem while there is one. -->
+            <button id="diag-summary" type="button" disabled></button>
           </div>
           <div id="editor"></div>
         </section>
         <!-- The compiled JS beside the editor on a wide screen (#87), filled by the app. -->
         <section id="js-pane" class="pane" aria-label="Compiled JS">
           <div class="pane-head">
-            <span>Compiled JS</span>
+            <h2 class="pane-title">Compiled JS</h2>
             <button id="js-pane-close" class="link" title="Put the JavaScript back in its tab">Back to the tab</button>
           </div>
           <div id="js-pane-body" tabindex="0"></div>
@@ -517,7 +596,8 @@
         <div id="right">
         <section id="tour" class="tour" aria-label="Guided tour" hidden>
           <div class="tour-meta"><span id="tour-count"></span><button id="tour-exit" class="link">Exit tour</button></div>
-          <h2 id="tour-title"></h2>
+          <!-- Focus comes here as a step opens, so its instructions are read first. -->
+          <h2 id="tour-title" tabindex="-1"></h2>
           <p id="tour-prose"></p>
           <p class="tour-task" id="tour-task"></p>
           <!-- The gallery example for the same idea (#84); leaving keeps the tour's progress. -->
@@ -539,17 +619,18 @@
           <p>You have met services and capabilities, Bynk's data types, and how it handles a missing value or a failure. Where next:</p>
           <ul class="tour-next-steps">
             <li><button id="tour-end-examples" class="link">Browse the examples</button>: <em>Lists and fold</em> and <em>Variants that carry data</em> go past the tour.</li>
-            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">Build an HTTP service ↗</a>, the Book's next tutorial.</li>
-            <li><a href="https://bynk-lang.org/book/" target="_blank" rel="noopener">Read the Bynk Book ↗</a>, the guide and reference.</li>
-            <li><a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a> to run programs on your own machine.</li>
+            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">Build an HTTP service <span aria-hidden="true">↗</span></a>, the Book's next tutorial.</li>
+            <li><a href="https://bynk-lang.org/book/" target="_blank" rel="noopener">Read the Bynk Book <span aria-hidden="true">↗</span></a>, the guide and reference.</li>
+            <li><a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk <span aria-hidden="true">↗</span></a> to run programs on your own machine.</li>
           </ul>
           <div class="tour-actions"><button id="tour-end-restart" class="link">Start tour over</button></div>
         </section>
-        <section class="pane" aria-label="Results">
+        <section id="results-pane" class="pane" aria-label="Results">
           <div class="pane-head">
+            <h2 class="sr-only">Results</h2>
             <div role="tablist" aria-label="Results">
               <button role="tab" id="tab-result" aria-selected="true" aria-controls="output" data-tab="result">Result</button>
-              <button role="tab" id="tab-logs" aria-selected="false" aria-controls="output" tabindex="-1" data-tab="logs">Logs <span id="logs-badge" class="badge" hidden></span></button>
+              <button role="tab" id="tab-logs" aria-selected="false" aria-controls="output" tabindex="-1" data-tab="logs">Logs <span id="logs-badge" class="badge" hidden></span><span id="logs-count" class="sr-only"></span></button>
               <button role="tab" id="tab-js" aria-selected="false" aria-controls="output" tabindex="-1" data-tab="js">Compiled JS</button>
             </div>
           </div>
@@ -573,7 +654,7 @@
           <button class="link" value="close" aria-label="Close share dialog">Close</button>
         </form>
         <div class="share-row">
-          <input id="share-url" readonly aria-label="Link to this snippet" />
+          <input id="share-url" readonly autofocus aria-label="Link to this snippet" />
           <button id="share-copy" class="primary" disabled>Copy</button>
         </div>
         <p id="share-status" role="status" aria-live="polite"></p>
@@ -608,8 +689,8 @@
           <h3>Running the rest</h3>
           <p>Install Bynk to run any program on your own machine, then deploy it to Cloudflare Workers when it's ready.</p>
           <ul class="tour-next-steps">
-            <li><a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk ↗</a></li>
-            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">Build an HTTP service ↗</a></li>
+            <li><a href="https://bynk-lang.org/book/introduction/install/" target="_blank" rel="noopener">Install Bynk <span aria-hidden="true">↗</span></a></li>
+            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">Build an HTTP service <span aria-hidden="true">↗</span></a></li>
           </ul>
         </div>
       </dialog>
@@ -620,8 +701,29 @@
           <button class="link" value="close" aria-label="Close standard library">Close</button>
         </form>
         <input id="reference-search" type="search" placeholder="Search, e.g. parse int" aria-label="Search the standard library" autocomplete="off" />
-        <p class="reference-note">Built-in types, the <code>bynk</code> capabilities and the first-party modules, read from the compiler this page runs. Use a capability with <code>consumes bynk { … }</code> and <code>given</code>; bring in a module with <code>uses</code>, e.g. <code>uses bynk.string</code>. Methods on values, such as <code>s.trim()</code> or <code>xs.fold(…)</code>, aren't listed yet: the compiler doesn't share them with the browser. <a href="https://bynk-lang.org/book/reference/types/#list-methods" target="_blank" rel="noopener">List's methods are in the Book ↗</a></p>
+        <p class="reference-note">Built-in types, the <code>bynk</code> capabilities and the first-party modules, read from the compiler this page runs. Use a capability with <code>consumes bynk { … }</code> and <code>given</code>; bring in a module with <code>uses</code>, e.g. <code>uses bynk.string</code>. Methods on values, such as <code>s.trim()</code> or <code>xs.fold(…)</code>, aren't listed yet: the compiler doesn't share them with the browser. <a href="https://bynk-lang.org/book/reference/types/#list-methods" target="_blank" rel="noopener">List's methods are in the Book <span aria-hidden="true">↗</span></a></p>
         <div id="reference-list" aria-live="polite"></div>
+      </dialog>
+      <!-- Keyboard shortcuts, which otherwise only tooltips show, and the code display. -->
+      <dialog id="keys" class="sheet" aria-labelledby="keys-title">
+        <form method="dialog" class="gallery-head">
+          <h2 id="keys-title">Keyboard and display</h2>
+          <button class="link" value="close" aria-label="Close Keyboard and display">Close</button>
+        </form>
+        <div class="about-body">
+          <h3>Shortcuts</h3>
+          <dl class="keys-list">
+            <dt><kbd data-mod>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>Run, from anywhere on the page</dd>
+            <dt><kbd>Shift</kbd> + <kbd data-alt>Alt</kbd> + <kbd>F</kbd></dt><dd>Format to the house style</dd>
+            <dt><kbd data-mod>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd></dt><dd>List the problems in the editor; Enter on one goes to it</dd>
+            <dt><kbd>F8</kbd></dt><dd>Go to the next problem</dd>
+            <dt><kbd>Ctrl</kbd> + <kbd>Space</kbd></dt><dd>Suggest completions</dd>
+            <dt><kbd>Tab</kbd></dt><dd>Leave the editor (it does not indent: new lines are indented for you)</dd>
+            <dt><kbd>Escape</kbd></dt><dd>Close a dialog, menu or list of suggestions</dd>
+          </dl>
+          <h3>Display</h3>
+          <p class="setting"><input type="checkbox" id="ligatures"><label for="ligatures">Draw <code>-&gt;</code>, <code>&lt;-</code> and <code>=&gt;</code> as single arrows. The code is the same either way: type the two characters.</label></p>
+        </div>
       </dialog>
       <dialog id="gallery" class="sheet" aria-labelledby="gallery-title">
         <form method="dialog" class="gallery-head">
@@ -629,20 +731,21 @@
           <button class="link" value="close" aria-label="Close examples">Close</button>
         </form>
         <input id="gallery-search" type="search" placeholder="Search examples" aria-label="Search examples" autocomplete="off" />
-        <div id="gallery-grid"></div>
+        <!-- Recent first: a returning visitor is most likely to want their own work back. -->
         <div id="recent-section" hidden>
           <h3 class="recent-title">Recent</h3>
           <div id="recent-grid" class="gallery-grid"></div>
         </div>
+        <div id="gallery-grid"></div>
         <p id="gallery-empty" class="out-empty" hidden>No example matches that search.</p>
         <p class="gallery-foot">Every example runs here, in your browser. <button type="button" class="link" data-about>What runs here?</button></p>
         <!-- What a single-file, in-browser playground can't show (#83): the Book has it. -->
         <section id="beyond" aria-labelledby="beyond-title">
           <h3 id="beyond-title" class="recent-title">Beyond the playground</h3>
           <ul>
-            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">An HTTP service ↗</a> Routes, JSON request bodies and <code>HttpResult</code>, compiled to a Worker with the CLI.</li>
-            <li><a href="https://bynk-lang.org/book/tutorials/06-testing/" target="_blank" rel="noopener">Testing ↗</a> <code>suite</code> and <code>case</code> blocks, <code>expect</code> and <code>stub</code> doubles, run with <code>bynk test</code>.</li>
-            <li><a href="https://bynk-lang.org/book/guides/program-structure/how-a-program-is-shaped/" target="_blank" rel="noopener">Modules and several contexts ↗</a> <code>commons</code>, <code>uses</code> and <code>consumes</code>: a playground file holds one context, so these need a project.</li>
+            <li><a href="https://bynk-lang.org/book/tutorials/02-http-service/" target="_blank" rel="noopener">An HTTP service <span aria-hidden="true">↗</span></a> Routes, JSON request bodies and <code>HttpResult</code>, compiled to a Worker with the CLI.</li>
+            <li><a href="https://bynk-lang.org/book/tutorials/06-testing/" target="_blank" rel="noopener">Testing <span aria-hidden="true">↗</span></a> <code>suite</code> and <code>case</code> blocks, <code>expect</code> and <code>stub</code> doubles, run with <code>bynk test</code>.</li>
+            <li><a href="https://bynk-lang.org/book/guides/program-structure/how-a-program-is-shaped/" target="_blank" rel="noopener">Modules and several contexts <span aria-hidden="true">↗</span></a> <code>commons</code>, <code>uses</code> and <code>consumes</code>: a playground file holds one context, so these need a project.</li>
           </ul>
         </section>
       </dialog>
