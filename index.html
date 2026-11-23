@@ -447,15 +447,20 @@
         #theme[aria-pressed="true"] .theme-label::after { content: ": on"; content: ": on" / ""; }
         #theme[aria-pressed="false"] .theme-label::after { content: ": off"; content: ": off" / ""; }
         /* One pane at a time, with a switch above (#view-switch): the editor gets the screen's
-           height, and Run shows the result. The tour card stays in view under either. */
-        main { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; overflow: auto; }
-        #editor-pane, #results-pane { min-height: 12rem; }
-        #view-switch { display: flex; }
-        main[data-view="code"] #results-pane { display: none; }
-        main[data-view="result"] { grid-template-rows: auto minmax(0, 1fr); }
-        main[data-view="result"] #editor-pane { display: none; }
-        #right { min-height: 0; }
-        main[data-view="code"] #right { grid-template-rows: auto; }
+           height, and Run shows the result. The tour card stays in view under either. Not in an
+           embed, which is narrow in most pages: a reader there wouldn't know to press Result to
+           see the first run's output, so its panes stack as before. */
+        main { grid-template-columns: 1fr; overflow: auto; }
+        :root:not([data-embed]) main { grid-template-rows: auto minmax(0, 1fr) auto; }
+        :root:not([data-embed]) :is(#editor-pane, #results-pane) { min-height: 12rem; }
+        :root:not([data-embed]) #view-switch { display: flex; }
+        :root:not([data-embed]) main[data-view="code"] #results-pane { display: none; }
+        :root:not([data-embed]) main[data-view="result"] { grid-template-rows: auto minmax(0, 1fr); }
+        :root:not([data-embed]) main[data-view="result"] #editor-pane { display: none; }
+        :root:not([data-embed]) #right { min-height: 0; }
+        :root:not([data-embed]) main[data-view="code"] #right { grid-template-rows: auto; }
+        [data-embed] main { grid-template-rows: minmax(15rem, 1fr) auto; }
+        [data-embed] #right { min-height: 20rem; }
         /* One row: Run and Share stay, the status gives way (it truncates) and the menu
            button sits at the right. */
         header { flex-wrap: nowrap; min-width: 0; }
@@ -470,9 +475,9 @@
       /* The code font draws ->, <- and => as single arrows. Off by default, so a newcomer sees
          the characters they type; Keyboard and display turns them on (data-ligatures). Last,
          and specific, because every `font:` shorthand above resets the ligatures. */
-      :root:not([data-ligatures="on"]) :is(code, kbd, pre, textarea, .cm-scroller, .out-code, .diag, #output, #js-pane-body, .card-peek) {
+      :root:not([data-ligatures="on"]) :is(code, kbd, pre, textarea, .cm-scroller, .cm-tooltip, .out-code, .diag, #output, #js-pane-body, .card-peek) {
         font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
-      :root[data-ligatures="on"] :is(code, kbd, pre, textarea, .cm-scroller, .out-code, .diag, #output, #js-pane-body, .card-peek) {
+      :root[data-ligatures="on"] :is(code, kbd, pre, textarea, .cm-scroller, .cm-tooltip, .out-code, .diag, #output, #js-pane-body, .card-peek) {
         font-variant-ligatures: contextual; font-feature-settings: "calt" 1, "liga" 1; }
     </style>
   </head>

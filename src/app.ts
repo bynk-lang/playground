@@ -721,6 +721,12 @@ function argsParam(): string | null {
 // automatic first run, an example or a tour starter).
 async function compileAndRun(remember = false): Promise<TourOutcome> {
   const id = ++runSeq;
+  if (remember) {
+    // Asked for, however (the button, Ctrl/Cmd+Enter, Enter in an argument): on a phone the
+    // result is what Run is for, so show it; and the restored note has said its piece.
+    if (NARROW.matches) showView("result");
+    hideRestoredNote();
+  }
   renderArgs();
   setStatus("compiling…", "busy");
   lastReply = undefined;
@@ -780,7 +786,6 @@ async function compileAndRun(remember = false): Promise<TourOutcome> {
     return { compiled: true, error: argError };
   }
   if (remember && !EMBED) rememberRun(source());
-  if (remember) hideRestoredNote();
   setStatus("running…", "busy");
   const reply = await new Promise<RunReply>((resolve) => {
     pending.set(id, resolve);
@@ -1706,11 +1711,7 @@ async function main(): Promise<void> {
   }
   $("format").title = `Format to the house style (${IS_APPLE ? "⌥⇧F" : "Shift+Alt+F"})`;
   $("format").addEventListener("click", formatSource);
-  // On a phone the result is what Run is for, so show it.
-  $("run").addEventListener("click", () => {
-    if (NARROW.matches) showView("result");
-    void compileAndRun(true);
-  });
+  $("run").addEventListener("click", () => void compileAndRun(true));
   $("diag-summary").addEventListener("click", () => {
     const pos = firstProblem();
     if (pos !== null) jumpToPos(pos);

@@ -1185,6 +1185,28 @@ test("the restored-snippet note goes away at the first edit", { skip }, async ()
   assert.equal(await page.visible("#restored-note"), true);
   await page.type("// more\n");
   assert.equal(await page.visible("#restored-note"), false);
+  // A run puts it away too, even one that doesn't compile.
+  await page.eval(`localStorage.setItem("bynk-draft", "zzz\\n")`);
+  await page.goto(app.url);
+  await settled();
+  assert.equal(await page.visible("#restored-note"), true);
+  await page.click("#run");
+  await settled();
+  assert.match(await status(), /error/);
+  assert.equal(await page.visible("#restored-note"), false);
+});
+
+test("a narrow embed stacks its panes, so the first run's output is in view", { skip }, async () => {
+  await page.setViewport(600, 480);
+  try {
+    await fresh("?embed=1");
+    assert.equal(await page.visible("#view-switch"), false);
+    assert.equal(await page.visible("#editor-pane"), true);
+    assert.equal(await page.visible("#results-pane"), true);
+    assert.match(await page.text("#output"), /Hello from Bynk!/);
+  } finally {
+    await page.setViewport(1512, 860);
+  }
 });
 
 test("a tour step opens with focus on its heading; a finished tour opens on its end card", { skip }, async () => {
@@ -1251,6 +1273,12 @@ test("on a phone one pane shows at a time: Run shows the result, a problem's loc
     assert.equal(await shown("#results-pane"), true);
     assert.equal(await shown("#editor-pane"), false);
     assert.equal(await page.eval(`document.querySelector('#view-switch [data-view="result"]').getAttribute("aria-pressed")`), "true");
+    // Ctrl+Enter shows the result too, as the button does.
+    await page.click('#view-switch [data-view="code"]');
+    await page.type("");
+    await page.key("Enter", { ctrl: true });
+    await settled();
+    assert.equal(await shown("#results-pane"), true, "Ctrl+Enter shows the result");
     // A broken program: the problem's location button goes back to the code.
     await page.click('#view-switch [data-view="code"]');
     await page.type("zzz ");
