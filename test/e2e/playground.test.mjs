@@ -859,15 +859,19 @@ test("embed: the share sheet's code loads the same snippet in the compact view",
 });
 
 test("inline embed: no wordmark or Open in playground, and the host's theme", { skip }, async () => {
-  await fresh("?embed=inline&theme=light");
+  await fresh();
+  // The visitor's own choice: the host's theme wins in this view, and the choice is kept.
+  await page.eval(`localStorage.setItem("bynk-theme", "light")`);
+  await page.goto(`${app.url}?embed=inline&theme=dark`);
+  await settled();
   assert.equal(await page.eval(`document.documentElement.dataset.embed`), "inline");
-  assert.equal(await page.eval(`document.documentElement.dataset.theme`), "light");
+  assert.equal(await page.eval(`document.documentElement.dataset.theme`), "dark");
   for (const hidden of [".wordmark", "#open-full", "#share", "#examples", "#theme", "#shared-note"]) {
     assert.equal(await page.visible(hidden), false, `${hidden} is hidden in the inline embed`);
   }
   assert.equal(await page.visible("#run"), true);
   assert.match(await page.text("#output"), /Hello from Bynk!/);
-  assert.equal(await page.eval(`localStorage.getItem("bynk-theme")`), null, "the host's theme is not saved");
+  assert.equal(await page.eval(`localStorage.getItem("bynk-theme")`), "light", "the visitor's own theme is untouched");
 });
 
 test("embed: never touches the visitor's own draft or recents", { skip }, async () => {

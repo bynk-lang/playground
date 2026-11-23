@@ -33,7 +33,8 @@
         // An embed may be told its host page's theme (?embed=inline&theme=light); it wins
         // for this view only and is never saved.
         var q = new URLSearchParams(location.search);
-        if (q.get("embed") && (q.get("theme") === "light" || q.get("theme") === "dark")) t = q.get("theme");
+        var e = q.get("embed");
+        if ((e === "1" || e === "inline") && (q.get("theme") === "light" || q.get("theme") === "dark")) t = q.get("theme");
         if (t !== "light" && t !== "dark") {
           t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
         }
