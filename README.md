@@ -52,6 +52,8 @@ grammar wasm and highlight query) as `bynk-web-<tag>.tar.gz`, and
 
 The share sheet offers an `<iframe>` for the snippet. It points at the same link with `?embed=1`, a compact view that runs the snippet and offers **Open in playground**. An embed never reads or writes the visitor's own draft, recents, tour progress or hints.
 
+A Bynk page that frames the editor inside its own content, such as bynk-lang.org's **Edit & run in-page**, uses `?embed=inline` instead. It is the compact view without the wordmark and without **Open in playground**, since the host page carries both, so what is left is the editor, Run and the results. Add `&theme=light` or `&theme=dark` to match the host page's theme; it applies to that view only and is never saved.
+
 ## Build
 
 ```sh

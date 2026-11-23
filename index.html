@@ -30,6 +30,11 @@
       (function () {
         var t = null;
         try { t = localStorage.getItem("bynk-theme"); } catch (e) {}
+        // An embed may be told its host page's theme (?embed=inline&theme=light); it wins
+        // for this view only and is never saved.
+        var q = new URLSearchParams(location.search);
+        var e = q.get("embed");
+        if ((e === "1" || e === "inline") && (q.get("theme") === "light" || q.get("theme") === "dark")) t = q.get("theme");
         if (t !== "light" && t !== "dark") {
           t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
         }
@@ -378,6 +383,9 @@
       [data-embed] #examples, [data-embed] #tour-btn, [data-embed] #format, [data-embed] #share, [data-embed] #theme, [data-embed] #learn, [data-embed] #menu-btn,
       [data-embed] #coach, [data-embed] #shared-note, [data-embed] #restored-note { display: none !important; }
       [data-embed] #app { padding: 0.5rem; gap: 0.5rem; }
+      /* The inline embed (?embed=inline): framed inside a Bynk page, which carries the brand
+         and its own "Open in playground" link, so neither is repeated here. */
+      [data-embed="inline"] .wordmark, [data-embed="inline"] #open-full { display: none !important; }
 
       /* Shared-snippet bar */
       #shared-note { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-raised);
