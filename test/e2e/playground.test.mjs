@@ -1078,6 +1078,27 @@ test("on a phone the panes stack and nothing scrolls sideways", { skip }, async 
     await page.setViewport(1512, 860);
   }
 });
+test("keyboard shortcuts sheet opens from ? and menu button, but not from editor or args", { skip }, async () => {
+  await fresh();
+  await page.eval(`document.activeElement?.blur()`);
+  await page.eval(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }))`);
+  assert.equal(await page.eval(`document.getElementById("shortcuts-sheet").open`), true);
+  await page.key("Escape");
+  assert.equal(await page.eval(`document.getElementById("shortcuts-sheet").open`), false);
+
+  await page.click(".cm-content");
+  await page.eval(`document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }))`);
+  assert.equal(await page.eval(`document.getElementById("shortcuts-sheet").open`), false);
+
+  await page.eval(`(() => { const form = document.getElementById("args"); form.hidden = false; const input = form.querySelector("input") || form.appendChild(document.createElement("input")); input.focus(); input.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true })); })()`);
+  assert.equal(await page.eval(`document.getElementById("shortcuts-sheet").open`), false);
+
+  await page.click("#learn-btn");
+  await page.click("#shortcuts-btn");
+  assert.equal(await page.eval(`document.getElementById("shortcuts-sheet").open`), true);
+  await page.key("Escape");
+  assert.equal(await page.eval(`document.getElementById("shortcuts-sheet").open`), false);
+});
 
 // Last, so it covers every flow above: the page did everything under its policy (#34).
 test("nothing the playground does is refused by its Content-Security-Policy", { skip }, async () => {
